@@ -58,11 +58,11 @@
 #define ASSERT( Expression )                  enum{ EXPAND_THEN_CONCAT( ASSERT_line_, __LINE__ ) = 1 / !!( Expression ) }
 #define ASSERTM( Expression, Message )        enum{ EXPAND_THEN_CONCAT( Message ## _ASSERT_line_, __LINE__ ) = 1 / !!( Expression ) } 
 
-/// @brief Unused: Number of CPU cycles for a given time in nanosecods
+/// @brief Conversion between cycles and nano seconds
 #define NS_PER_SEC  1000000000ULL
-//#define CYCLES_PER_SEC 16000000UL
-#define CYCLES_PER_SEC (uint64_t) (F_CPU)
-#define CYCLES(time_ns) (((((uint64_t) (CYCLES_PER_SEC)) * (time_ns)) + NS_PER_SEC - 1ULL) / NS_PER_SEC)
+#define CYCLES_PER_SEC ((uint64_t) (F_CPU))
+#define CYCLES(time_ns) (((CYCLES_PER_SEC * (time_ns)) + NS_PER_SEC - 1ULL) / NS_PER_SEC)
+#define NANOSECONDS(cycles) (((cycles) * NS_PER_SEC + CYCLES_PER_SEC-1) / CYCLES_PER_SEC)
 
 ////////////////////////////////////////////////////////////////////////////////
 // AVR (Arduino) bitBang LED support class, implements bitBang based sentBytes()
@@ -259,17 +259,22 @@ template<
 	{
 		printChar("\nclass avrBitbangLedStrip<...>\n");
 
+		printInt(CYCLES_PER_SEC/1000000);
+		printChar("MHz CPU, ");
+		printInt(NANOSECONDS(1000));
+		printChar(" picoseconds per cycle\n");
+
 		printChar("ONE  HIGH=");
 		printInt(high1);
 		printChar(" LOW=");
 		printInt(low1);
-		printChar("\n");
+		printChar(" cycles\n");
 
 		printChar("ZERO HIGH=");
 		printInt(high0);
 		printChar(" LOW=");
 		printInt(low0);
-		printChar("\n");
+		printChar(" cycles\n");
 
 		printChar("REFRESH MSEC=");
 		printInt(minMsRefresh);
@@ -557,10 +562,20 @@ avrBitbangLedStrip<FAB_TVAR>::clear( const uint16_t numPixels)
 // Defines the actual LED timings
 // WS2811 2811B 2812B 2812S 2801 LEDs use the same protocols and timings
 ////////////////////////////////////////////////////////////////////////////////
-#define WS2812B_1H_CY 6  // 7 10 _----------__
-#define WS2812B_1L_CY 2  // 2  4 .    .    .
-#define WS2812B_0H_CY 2  // 2  5 _-----_______
-#define WS2812B_0L_CY 2  // 2  7 .    .    .
+#if 0
+// These are the less agressive bitbanging timings
+#define WS2812B_1H_CY CYCLES(437)  // 6  7 10 _----------__
+#define WS2812B_1L_CY CYCLES(125)  // 2  2  4 .    .    .
+#define WS2812B_0H_CY CYCLES(125)  // 2  2  5 _-----_______
+#define WS2812B_0L_CY CYCLES(437)  // 2  2  7 .    .    .
+#else
+// These are the more agressive bitbanging timings
+#define WS2812B_1H_CY CYCLES(375)  // 6  7 10 _----------__
+#define WS2812B_1L_CY CYCLES(125)  // 2  2  4 .    .    .
+#define WS2812B_0H_CY CYCLES(125)  // 2  2  5 _-----_______
+#define WS2812B_0L_CY CYCLES(125)  // 2  2  7 .    .    .
+#endif
+
 #define WS2812B_MS_REFRESH 20 // Minimum sleep time (low) to reset LED strip
 #define WS2812B_NS_RF 2000000 // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 

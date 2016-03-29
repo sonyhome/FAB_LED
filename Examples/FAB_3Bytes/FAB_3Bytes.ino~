@@ -84,7 +84,7 @@ colorN(uint8_t red, uint8_t green, uint8_t blue)
 	pixel_t * pix = (pixel_t *) array;
 
 	// Set each set of 3 bytes for every pixel
-	for (uint16_t i = 0; i < numPixels; i++) {
+	for (uint8_t i = 0; i < numPixels; i++) {
 		pix[i].r = red;
 		pix[i].g = green;
 		pix[i].b = blue;
@@ -146,7 +146,7 @@ color1N(uint8_t red, uint8_t green, uint8_t blue)
 	__builtin_avr_cli();
 
 	// Display the LEDs
-	for (uint16_t i = 0; i < numPixels; i++) {
+	for (uint8_t i = 0; i < numPixels; i++) {
 		WS2812B_STRIP.sendPixels(1, array);
 	}
 
@@ -192,7 +192,7 @@ rainbow(uint8_t brightness, uint8_t incLevel)
 	pix[0].r = brightness;
 	pix[0].g = 0;
 	pix[0].b = 0;
-	for (uint16_t i = 1; i < numPixels; i++) {
+	for (uint8_t i = 1; i < numPixels; i++) {
 		// Set pix to previous pix color
 		pix[i].r = pix[i-1].r;
 		pix[i].g = pix[i-1].g;
@@ -267,7 +267,7 @@ jitter()
 	pixel_t * pix = (pixel_t *) array;
 
 	// Set each set of 3 bytes for every pixel
-	for (uint16_t i = 0; i < arrayDim; i++) {
+	for (uint8_t i = 0; i < arrayDim; i++) {
 		if (i % 2 == 0) {
 			pix[i].r = 8;
 		}
@@ -283,9 +283,7 @@ jitter()
 	pix[maxJitter].b = 0;
 	pix[maxJitter].r = 64;
 
-	// Repeat 10 times
 	for (uint8_t t = 0; t < 10; t++) {
-		// Scroll display
 		for (uint8_t i = 0; i <= maxJitter; i++) {
 			const uint8_t * displayPt = &array[3*i];
 
