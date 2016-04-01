@@ -34,6 +34,10 @@ const uint16_t numPixels = 14;
 /// @brief this definition allows you to select which digital port the LED strip
 /// is attached to: Valid are ports A through D, 0 to 7. For AtTiny, you may
 /// want to use port D2 instead of D6.
+/// For different LED strip models you may want to match them to APA104 or WS2812
+/// LED timings by using the matching implementation class, for example:
+//ws2812<D,6> WS2812B_STRIP;
+//apa104<D,6> WS2812B_STRIP;
 //ws2812b<D,2> WS2812B_STRIP;
 
 ws2812b<D,6> WS2812B_STRIP;
@@ -59,13 +63,14 @@ typedef struct {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Waits then clears the LED strip.
 ////////////////////////////////////////////////////////////////////////////////
-void
-holdAndClear(uint16_t on_time, uint16_t off_time)
+void holdAndClear(uint16_t on_time, uint16_t off_time)
 {
 	// Wait 1sec, turn off LEDs, wait 200msec
 	delay(on_time);
+	PORTB ^= 1U << 5; // On
 	WS2812B_STRIP.clear(numPixels);
 	delay(off_time);
+	PORTB ^= 1U << 5; // Off
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -73,8 +78,7 @@ holdAndClear(uint16_t on_time, uint16_t off_time)
 /// We use a byte array storing 3 bytes per pixel, holding full 8-bit RGB values
 /// each value can be from 0 to 255.
 ////////////////////////////////////////////////////////////////////////////////
-void
-colorN(uint8_t red, uint8_t green, uint8_t blue)
+void colorN(uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3*numPixels] = {};
@@ -99,8 +103,7 @@ colorN(uint8_t red, uint8_t green, uint8_t blue)
 /// We use a 3 byte array storing one pixel.
 /// Each value can be from 0 to 255.
 ////////////////////////////////////////////////////////////////////////////////
-void
-color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
+void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t dim = pos+1;
@@ -127,8 +130,7 @@ color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 /// If this feature fails, you may see only 1 pixel lit, or a varying number
 /// of pixels glitching on and off.
 ////////////////////////////////////////////////////////////////////////////////
-void
-color1N(uint8_t red, uint8_t green, uint8_t blue)
+void color1N(uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3] = {};
@@ -157,8 +159,7 @@ color1N(uint8_t red, uint8_t green, uint8_t blue)
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Helper routine to calculate the next color for a rainbow
 ////////////////////////////////////////////////////////////////////////////////
-void
-colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
+void colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
 {
 	if (B == 0 && R != 0) {
 		R = (R <= incStep) ? 0 : R - incStep;
@@ -181,8 +182,7 @@ colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
 /// @brief Display numPixels with a rainbow.
 /// The rainbow is re-painted after the arryay is displayed.
 ////////////////////////////////////////////////////////////////////////////////
-void
-rainbow(uint8_t brightness, uint8_t incLevel)
+void rainbow(uint8_t brightness, uint8_t incLevel)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3*numPixels] = {};
@@ -221,8 +221,7 @@ rainbow(uint8_t brightness, uint8_t incLevel)
 /// If this feature fails, you may see only 1 pixel lit, or a varying number
 /// of pixels glitching on and off.
 ////////////////////////////////////////////////////////////////////////////////
-void
-rainbow1N(uint8_t brightness, uint8_t incLevel)
+void rainbow1N(uint8_t brightness, uint8_t incLevel)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3] = {};
@@ -254,8 +253,7 @@ rainbow1N(uint8_t brightness, uint8_t incLevel)
 /// We set the R, G, B values randomly and jitter them by one to
 /// animate them.
 ////////////////////////////////////////////////////////////////////////////////
-void
-jitter()
+void jitter()
 {
 	// Allocate array with half the pixels because we past it twice.
 	// Add maxJitter+1 pixels because we change the offset we start displaying.
@@ -309,14 +307,16 @@ jitter()
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief This method is automatically called once when the board boots.
 ////////////////////////////////////////////////////////////////////////////////
-void setup() {
+void setup()
+{
 	// Turn off first 1000 LEDs
 	WS2812B_STRIP.clear(1000);
 
-	// Configure a strobe signal to Port D5 for people who
+	// Configure a strobe signal to Port B5 for people who
 	// use oscilloscopes to look at the signal sent to the LEDs
-	DDRD |= 1U << 5;
-	PORTD &= ~(1U << 5);
+	// Note that B5 correspons to the pin13 LED on Arduino Uno.
+	DDRB |= 1U << 5;
+	PORTB &= ~(1U << 5);
 }
 
 

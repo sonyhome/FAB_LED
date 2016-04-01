@@ -9,6 +9,9 @@
 /// This example works for a regular Arduino board connected to your PC via the
 /// USB port to the Arduino IDE (integrated development environment used to
 /// compile and load an arduino sketch program to your arduino board).
+///
+/// In the IDE, open the Serial console to see the debug information printed.
+///
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -54,7 +57,8 @@ void FAB_Print(uint32_t u) {Serial.print(u);}
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief This method is automatically called once when the board boots.
 ////////////////////////////////////////////////////////////////////////////////
-void setup() {
+void setup()
+{
 	// Configure Serial for printing.
 	Serial.begin(9600);
 
@@ -254,8 +258,7 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Helper routine to calculate the next color for a rainbow
 ////////////////////////////////////////////////////////////////////////////////
-void
-colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
+void colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
 {
 	if (B == 0 && R != 0) {
 		R = (R <= incStep) ? 0 : R - incStep;
@@ -433,4 +436,3 @@ void jitter()
 	WS2812B_STRIP.clear(numPixels);
 	delay(1000);
 }
-

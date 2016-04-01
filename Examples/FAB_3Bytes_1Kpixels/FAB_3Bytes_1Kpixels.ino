@@ -8,13 +8,11 @@
 ///
 /// This example works for a regular Arduino board connected to your PC via the
 /// USB port to the Arduino IDE (integrated development environment used to
-/// compile and load an arduino sketch program to your arduino board).A
+/// compile and load an arduino sketch program to your arduino board).
 ///
-/// If the program doesn't run when you specify too many LEDs, comment out the
-/// calls to routines that allocate arrays of 3*numPixels, and keep those that
-/// allocate a fixed size (their names end witn N). It should work and you will
-/// be able to light up up to MAXINT LEDs, assuming they are powered properly.
-/// When it fails LEDs won't turn on. The program works on an Uno with 255 LEDs.
+/// This example should control up to 64K LEDs using hardly any memory.
+/// It is preconfigured to light up 1000 pixels, but adding more pixels will
+/// increase the display refresh lag.
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -59,13 +57,14 @@ typedef struct {
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Waits then clears the LED strip.
 ////////////////////////////////////////////////////////////////////////////////
-void
-holdAndClear(uint16_t on_time, uint16_t off_time)
+void holdAndClear(uint16_t on_time, uint16_t off_time)
 {
 	// Wait 1sec, turn off LEDs, wait 200msec
 	delay(on_time);
+	PORTB ^= 1U << 5; // On
 	WS2812B_STRIP.clear(numPixels);
 	delay(off_time);
+	PORTB ^= 1U << 5; // Off
 }
 
 
@@ -75,8 +74,7 @@ holdAndClear(uint16_t on_time, uint16_t off_time)
 /// We use a 3 byte array storing one pixel.
 /// Each value can be from 0 to 255.
 ////////////////////////////////////////////////////////////////////////////////
-void
-color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
+void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t dim = pos+1;
@@ -103,8 +101,7 @@ color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 /// If this feature fails, you may see only 1 pixel lit, or a varying number
 /// of pixels glitching on and off.
 ////////////////////////////////////////////////////////////////////////////////
-void
-color1N(uint8_t red, uint8_t green, uint8_t blue)
+void color1N(uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3] = {};
@@ -133,8 +130,7 @@ color1N(uint8_t red, uint8_t green, uint8_t blue)
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Helper routine to calculate the next color for a rainbow
 ////////////////////////////////////////////////////////////////////////////////
-void
-colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
+void colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
 {
 	if (B == 0 && R != 0) {
 		R = (R <= incStep) ? 0 : R - incStep;
@@ -163,8 +159,7 @@ colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
 /// If this feature fails, you may see only 1 pixel lit, or a varying number
 /// of pixels glitching on and off.
 ////////////////////////////////////////////////////////////////////////////////
-void
-rainbow1N(uint8_t brightness, uint8_t incLevel)
+void rainbow1N(uint8_t brightness, uint8_t incLevel)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3] = {};
@@ -195,14 +190,16 @@ rainbow1N(uint8_t brightness, uint8_t incLevel)
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief This method is automatically called once when the board boots.
 ////////////////////////////////////////////////////////////////////////////////
-void setup() {
+void setup()
+{
 	// Turn off first 1000 LEDs
 	WS2812B_STRIP.clear(1000);
 
-	// Configure a strobe signal to Port D5 for people who
+	// Configure a strobe signal to Port B5 for people who
 	// use oscilloscopes to look at the signal sent to the LEDs
-	DDRD |= 1U << 5;
-	PORTD &= ~(1U << 5);
+	// Port B5 corresponds to the Arduino Uno pin13 (LED).
+	DDRB |= 1U << 5;
+	PORTB &= ~(1U << 5);
 }
 
 

@@ -558,30 +558,35 @@ avrBitbangLedStrip<FAB_TVAR>::clear( const uint16_t numPixels)
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// Implementation class for WS2812B LED strip
+// Implementation classes for LED strip
 // Defines the actual LED timings
-// WS2811 2811B 2812B 2812S 2801 LEDs use the same protocols and timings
+// WS2811 2811B 2812B 2812S 2801 LEDs use similar protocols and timings
+////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////
+// WS2812B (default, mainstream)
 ////////////////////////////////////////////////////////////////////////////////
 #if 0
 // These are the less agressive bitbanging timings
-#define WS2812B_1H_CY CYCLES(437)  // 6  7 10 _----------__
-#define WS2812B_1L_CY CYCLES(125)  // 2  2  4 .    .    .
-#define WS2812B_0H_CY CYCLES(125)  // 2  2  5 _-----_______
-#define WS2812B_0L_CY CYCLES(437)  // 2  2  7 .    .    .
+#define WS2812B_1H_CY CYCLES(650)  // 650ns-950ns _----------__
+#define WS2812B_1L_CY CYCLES(125)  // 250ns-550ns .    .    .
+#define WS2812B_0H_CY CYCLES(125)  // 250ns-550ns _-----_______
+#define WS2812B_0L_CY CYCLES(650)  // 650ns-950ns .    .    .
+#define WS2812B_MS_REFRESH 50      // 50,000ns Minimum sleep time to reset LED strip
+#define WS2812B_NS_RF 2000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #else
-// These are the more agressive bitbanging timings
-#define WS2812B_1H_CY CYCLES(375)  // 6  7 10 _----------__
+// These are the more agressive bitbanging timings, note 0 and 1 have different durations
+#define WS2812B_1H_CY CYCLES(500)  // 6  7 10 _----------__
 #define WS2812B_1L_CY CYCLES(125)  // 2  2  4 .    .    .
 #define WS2812B_0H_CY CYCLES(125)  // 2  2  5 _-----_______
 #define WS2812B_0L_CY CYCLES(125)  // 2  2  7 .    .    .
+#define WS2812B_MS_REFRESH 20      // Minimum sleep time (low) to reset LED strip
+#define WS2812B_NS_RF 2000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #endif
-
-#define WS2812B_MS_REFRESH 20 // Minimum sleep time (low) to reset LED strip
-#define WS2812B_NS_RF 2000000 // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 
 #define FAB_TVAR_WS2812B WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
 	WS2812B_0L_CY, WS2812B_MS_REFRESH, portId, portBit
-
 template<avrLedStripPort portId, uint8_t portBit>
 class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
 {
@@ -589,6 +594,50 @@ class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
 	ws2812b() : avrBitbangLedStrip<FAB_TVAR_WS2812B>() {};
 	~ws2812b() {};
 };
+#undef FAB_TVAR_WS2812B
+
+
+////////////////////////////////////////////////////////////////////////////////
+// WS2812 (1st generation of LEDs)
+////////////////////////////////////////////////////////////////////////////////
+#define WS2812_1H_CY CYCLES(550)  // 500ns 550ns-850ns  _----------__
+#define WS2812_1L_CY CYCLES(200)  // 125ns 200ns-500ns  .    .    .
+#define WS2812_0H_CY CYCLES(200)  // 125ns 200ns-500ns  _-----_______
+#define WS2812_0L_CY CYCLES(550)  // 500ns 550ns-850ns  .    .    .
+#define WS2812_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
+#define WS2812_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
+#define FAB_TVAR_WS2812 WS2812_1H_CY, WS2812_1L_CY, WS2812_0H_CY, \
+	WS2812_0L_CY, WS2812_MS_REFRESH, portId, portBit
+template<avrLedStripPort portId, uint8_t portBit>
+class ws2812 : public avrBitbangLedStrip<FAB_TVAR_WS2812>
+{
+	public:
+	ws2812() : avrBitbangLedStrip<FAB_TVAR_WS2812>() {};
+	~ws2812() {};
+};
+#undef FAB_TVAR_WS2812
+
+
+////////////////////////////////////////////////////////////////////////////////
+// APA104 (newer better defined timings)
+////////////////////////////////////////////////////////////////////////////////
+#define APA104_1H_CY CYCLES(1210) // 500ns 1210ns-1510ns _----------__
+#define APA104_1L_CY CYCLES(200)  // 125ns  200ns-500ns  .    .    .
+#define APA104_0H_CY CYCLES(200)  // 125ns  200ns-500ns  _-----_______
+#define APA104_0L_CY CYCLES(1210) // 500ns 1210ns-1510ns .    .    .
+#define APA104_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
+#define APA104_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
+#define FAB_TVAR_APA104 APA104_1H_CY, APA104_1L_CY, APA104_0H_CY, \
+	APA104_0L_CY, APA104_MS_REFRESH, portId, portBit
+template<avrLedStripPort portId, uint8_t portBit>
+class apa104 : public avrBitbangLedStrip<FAB_TVAR_APA104>
+{
+	public:
+	apa104() : avrBitbangLedStrip<FAB_TVAR_APA104>() {};
+	~apa104() {};
+};
+#undef FAB_TVAR_APA104
+#define pl9823 apa104; 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief SK6812 LED strips - Same as WS2812 except faster PWM refresh rate
