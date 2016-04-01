@@ -8,6 +8,10 @@
 avrLedStripPort     KEYWORD1
 avrBitbangLedStrip  KEYWORD1
 ws2812b             KEYWORD1
+ws2812              KEYWORD1
+pl9823              KEYWORD1
+apa102              KEYWORD1
+apa104              KEYWORD1
 
 #######################################
 # Methods and Functions (KEYWORD2)
@@ -26,41 +30,6 @@ minRefreshDelay     KEYWORD2
 # Instances (KEYWORD2)
 #######################################
 
-ws2812b_portA0	KEYWORD1
-ws2812b_portA1	KEYWORD1
-ws2812b_portA2	KEYWORD1
-ws2812b_portA3	KEYWORD1
-ws2812b_portA4	KEYWORD1
-ws2812b_portA5	KEYWORD1
-ws2812b_portA6	KEYWORD1
-ws2812b_portA7	KEYWORD1
-
-ws2812b_portB0	KEYWORD1
-ws2812b_portB1	KEYWORD1
-ws2812b_portB2	KEYWORD1
-ws2812b_portB3	KEYWORD1
-ws2812b_portB4	KEYWORD1
-ws2812b_portB5	KEYWORD1
-ws2812b_portB6	KEYWORD1
-ws2812b_portB7	KEYWORD1
-
-ws2812b_portC0	KEYWORD1
-ws2812b_portC1	KEYWORD1
-ws2812b_portC2	KEYWORD1
-ws2812b_portC3	KEYWORD1
-ws2812b_portC4	KEYWORD1
-ws2812b_portC5	KEYWORD1
-ws2812b_portC6	KEYWORD1
-ws2812b_portC7	KEYWORD1
-
-ws2812b_portD0	KEYWORD1
-ws2812b_portD1	KEYWORD1
-ws2812b_portD2	KEYWORD1
-ws2812b_portD3	KEYWORD1
-ws2812b_portD4	KEYWORD1
-ws2812b_portD5	KEYWORD1
-ws2812b_portD6	KEYWORD1
-ws2812b_portD7	KEYWORD1
 
 #######################################
 # Constants (LITERAL1)

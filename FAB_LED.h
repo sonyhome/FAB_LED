@@ -580,7 +580,7 @@ avrBitbangLedStrip<FAB_TVAR>::clear( const uint16_t numPixels)
 #define WS2812B_1H_CY CYCLES(500)  // 6  7 10 _----------__
 #define WS2812B_1L_CY CYCLES(125)  // 2  2  4 .    .    .
 #define WS2812B_0H_CY CYCLES(125)  // 2  2  5 _-----_______
-#define WS2812B_0L_CY CYCLES(125)  // 2  2  7 .    .    .
+#define WS2812B_0L_CY CYCLES(188)  // 2  2  7 .    .    .
 #define WS2812B_MS_REFRESH 20      // Minimum sleep time (low) to reset LED strip
 #define WS2812B_NS_RF 2000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #endif

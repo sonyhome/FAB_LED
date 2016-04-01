@@ -1,14 +1,14 @@
 # FAB_LED
 Fast Arduino Bitbang (FAB) LED library.
 
-Installation:
+# Installation:
 
 Unzip the FAB_LED_main directory and move it into your Arduino library directory
 (user/Documents/Arduino/libraries) and rename the directory FAB_LED. Launch the
 Arduino IDE, and you should see in the examples a new FAB_LED entry. Try them.
 
 
-Why FAB_LED:
+# Why FAB_LED:
 
 FAB_LED supports WS2812B and similar LEDs, on Arduino AVR and ARM platform,
 8MHz and above.
