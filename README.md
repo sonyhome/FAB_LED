@@ -1,6 +1,15 @@
 # FAB_LED
 Fast Arduino Bitbang (FAB) LED library.
 
+Installation:
+
+Unzip the FAB_LED_main directory and move it into your Arduino library directory
+(user/Documents/Arduino/libraries) and rename the directory FAB_LED. Launch the
+Arduino IDE, and you should see in the examples a new FAB_LED entry. Try them.
+
+
+Why FAB_LED:
+
 FAB_LED supports WS2812B and similar LEDs, on Arduino AVR and ARM platform,
 8MHz and above.
 
@@ -38,8 +47,14 @@ call a draw routine afterwards.
 The library's bit-banging core code should work on most CPUs, for all
 frequencies over 8MHz. It is written in C, and the compiler adjusts the timings
 at compile time. In contrast, other libraries implement bit-banging in assembly
-and only support CPUi frequencies that they have  hardcoded.
+and only support CPU frequencies that they have been hardcoded.
 
 # Releases
 
+April 01, 2016 - Beta with 3 examples, one for infinite LED strips, one printing stats to Serial console,
+                 hearbeat on pin13/PortB5, the LED on the Arduino Uno board
+                 Added apa104, ws2812b and ws2812 classes. The ws2812b class by default will have the most
+                 aggressive timings to push data 2X faster to the strips.
+                 Bug fixes: example function declarations reformated to compile on Mac, slowed 1H timing
+                 to work with more LED strip types.
 March 23, 2016 - Beta with one example for 24bit pixels.
