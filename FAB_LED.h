@@ -275,6 +275,19 @@ class avrBitbangLedStrip
 			const uint8_t value) __attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
+	/// @brief Sends an array of 32bit words encoding 0x00bbrrgg to the LEDs
+	/// This is the standard encoding for most libraries and wastes 25% of
+	/// the SRAM.
+	///
+	/// @param[in] numPixels Number of pixels to write
+	/// @param[in] array     Array of 1 word per pixels in native order
+	///                      (most significant byte is ignored)
+	////////////////////////////////////////////////////////////////////////
+	static inline void sendPixels(
+			const uint16_t numPixels,
+			const uint32_t * pixelArray) __attribute__ ((always_inline));
+
+	////////////////////////////////////////////////////////////////////////
 	/// @brief Sends 3-byte pixels to the LED strip.
 	/// This function should be the most common used method.
 	///
@@ -303,19 +316,6 @@ class avrBitbangLedStrip
 	static inline void sendPixels(
 			const uint16_t numPixels,
 			const bgr * array) __attribute__ ((always_inline));
-
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Sends an array of 32bit words encoding 0x00bbrrgg to the LEDs
-	/// This is the standard encoding for most libraries and wastes 25% of
-	/// the SRAM.
-	///
-	/// @param[in] numPixels Number of pixels to write
-	/// @param[in] array     Array of 1 word per pixels in native order
-	///                      (most significant byte is ignored)
-	////////////////////////////////////////////////////////////////////////
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const uint32_t * pixelArray) __attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Sends an array of bits encoded with a palette to the LEDs.
@@ -432,7 +432,16 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 	printInt(low0);
 	printChar(" cycles\n");
 
-	printChar("REFRESH MSEC=");
+	switch (colors) {
+		case NONE: printChar("NONE"); break;
+		case RGB: printChar("RGB"); break;
+		case GRB: printChar("GRB"); break;
+		case BGR: printChar("BGR"); break;
+		case RGBW: printChar("RGBW"); break;
+		default: printChar("ERROR!"); break;
+	}
+
+	printChar(" REFRESH MSEC=");
 	printInt(minMsRefresh);
 	printChar("\n");
 
@@ -580,7 +589,6 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 					sendBytes(1, &array[i].r); \
 					break;                     \
 				default:                           \
-					ASSERT(0);                 \
 					break;                     \
 			}                                          \
 		}                                                  \
@@ -657,7 +665,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 
 	if (colors == RGBW) {
 		// 4 byte per pixel array, print all
-		sendBytes(numPixels * bytesPerPixel, pixelArray);
+		sendBytes((const uint16_t) numPixels * bytesPerPixel, (const uint8_t *) pixelArray);
 	} else {
 		// 3 byte per pixel array, print 3 out of 4.
 		for (int i=0; i< numPixels; i++) {
@@ -833,6 +841,27 @@ class apa104 : public avrBitbangLedStrip<FAB_TVAR_APA104>
 };
 #undef FAB_TVAR_APA104
 #define pl9823 apa104; 
+
+
+////////////////////////////////////////////////////////////////////////////////
+// APA106 (like APA104, but with LEDs ordered as RGB instead of GRB)
+////////////////////////////////////////////////////////////////////////////////
+#define APA106_1H_CY CYCLES(1210) // 500ns 1210ns-1510ns _----------__
+#define APA106_1L_CY CYCLES(200)  // 125ns  200ns-500ns  .    .    .
+#define APA106_0H_CY CYCLES(200)  // 125ns  200ns-500ns  _-----_______
+#define APA106_0L_CY CYCLES(1210) // 500ns 1210ns-1510ns .    .    .
+#define APA106_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
+#define APA106_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
+#define FAB_TVAR_APA106 APA106_1H_CY, APA106_1L_CY, APA106_0H_CY, \
+	APA106_0L_CY, APA106_MS_REFRESH, portId, portBit, RGB
+template<avrLedStripPort portId, uint8_t portBit>
+class apa106 : public avrBitbangLedStrip<FAB_TVAR_APA106>
+{
+	public:
+	apa106() : avrBitbangLedStrip<FAB_TVAR_APA106>() {};
+	~apa106() {};
+};
+#undef FAB_TVAR_APA106
 
 
 

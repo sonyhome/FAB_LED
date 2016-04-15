@@ -3,14 +3,21 @@
 /// Fast Adressable Bitbang LED Library
 /// Copyright (c)2015, 2016 Dan Truong
 ///
-/// This is an example use of the FAB_LED libbrary using 3 bytes for each pixel,
-/// one byte per color (Green, Red, Blue).
+/// This example will use the debug interface of the FAB_LED library to write
+/// to the console debug information.
+///
+/// Visual display:
+///
+/// In the IDE, open the Serial console to see the debug information printed.
+/// You will see the properties of the LED strips.
+/// you will then see some LED demos, and on the console the memory used.
+///
+/// Hardware configuration:
 ///
 /// This example works for a regular Arduino board connected to your PC via the
 /// USB port to the Arduino IDE (integrated development environment used to
-/// compile and load an arduino sketch program to your arduino board).
-///
-/// In the IDE, open the Serial console to see the debug information printed.
+/// compile and load an arduino sketch program to your arduino board). It will
+/// by default use the Serial.print() routines.
 ///
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -20,28 +27,21 @@
 // Make the IDE compile at -O2 (fast code) instead of -Os (small size).
 #pragma GCC optimize ("-O2")
 
-ws2812b<D,6> WS2812B_STRIP;
-
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Declare a pixel as 3 bytes, each holding a color of [0..255]. The
-/// WS2812B LED strips colors are in Green, Red, Blue order. Some other devices
-/// may order Red, Green, Blue.
-/// If the wrong colors are displayed, you may have to reorder those fields to
-/// match your LEDs.
+/// @brief By default the test drives a WS2812B LED strip on port D6 (pin 6 on
+/// Arduino uno). Change the model and ports here to match your configuration.
 ////////////////////////////////////////////////////////////////////////////////
-typedef struct {
-	uint8_t g;
-	uint8_t r;
-	uint8_t b;
-} GRBpixel_t;
-
+ws2812b<D,6> myLeds;
+//apa104<D,6> myLeds;
+//apa106<D,6> myLeds;
+//sk6812<D,6> myLeds;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief This parameter says how many LEDs you will be controlling.
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs.
 ////////////////////////////////////////////////////////////////////////////////
-const uint16_t numPixels = 14;
+const uint16_t numPixels = 8;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Methods defined in order to use the debug() call, which will display
@@ -64,10 +64,10 @@ void setup()
 
 	// Display LED strip parameters through  Serial, using the two functions
 	// defined above.
-	WS2812B_STRIP.debug<&FAB_Print, &FAB_Print>();
+	myLeds.debug<&FAB_Print, &FAB_Print>();
 
 	// Turn off first 1K LEDs
-	WS2812B_STRIP.clear(1000);
+	myLeds.clear(1000);
 
 	// Configure a strobe signal to Port D5 for people who
 	// use oscilloscopes to look at the signal sent to the LEDs
@@ -127,7 +127,7 @@ void holdAndClear(uint16_t on_time, uint16_t off_time)
 {
 	// Wait 1sec, turn off LEDs, wait 200msec
 	delay(on_time);
-	WS2812B_STRIP.clear(numPixels);
+	myLeds.clear(numPixels);
 	delay(off_time);
 }
 
@@ -151,8 +151,8 @@ void colorN(uint8_t red, uint8_t green, uint8_t blue)
 	uint8_t array[3*numPixels] = {};
 
 	// We cast "array" to "pix" so we can write the colors using
-	// the GRBpixel_t structure. It's easier to read.
-	GRBpixel_t * pix = (GRBpixel_t *) array;
+	// the grb structure. It's easier to read.
+	grb * pix = (grb *) array;
 
 	// Set each set of 3 bytes for every pixel
 	for (uint8_t i = 0; i < numPixels; i++) {
@@ -166,7 +166,7 @@ void colorN(uint8_t red, uint8_t green, uint8_t blue)
 	Serial.println(sizeof(array));
 
 	// Display the LEDs
-	WS2812B_STRIP.sendPixels(numPixels, array);
+	myLeds.sendPixels(numPixels, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -193,8 +193,8 @@ void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 	memset(array,0,sizeof(array));
 
 	// We cast "array" to "pix" so we can write the colors using
-	// the GRBpixel_t structure. It's easier to read.
-	GRBpixel_t * pix = (GRBpixel_t *) array;
+	// the grb structure. It's easier to read.
+	grb * pix = (grb *) array;
 
 	pix[pos].r = red;
 	pix[pos].g = green;
@@ -205,7 +205,7 @@ void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 	Serial.println(sizeof(array));
 
 	// Display the LEDs
-	WS2812B_STRIP.sendPixels(dim, array);
+	myLeds.sendPixels(dim, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -231,8 +231,8 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 	uint8_t array[3] = {};
 
 	// We cast "array" to "pix" so we can write the colors using
-	// the GRBpixel_t structure. It's easier to read.
-	GRBpixel_t * pix = (GRBpixel_t *) array;
+	// the grb structure. It's easier to read.
+	grb * pix = (grb *) array;
 
 	pix[0].r = red;
 	pix[0].g = green;
@@ -248,7 +248,7 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 
 	// Display the LEDs
 	for (uint8_t i = 0; i < numPixels; i++) {
-		WS2812B_STRIP.sendPixels(1, array);
+		myLeds.sendPixels(1, array);
 	}
 
 	// Restore the old interrupt state
@@ -290,7 +290,7 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3*numPixels] = {};
-	GRBpixel_t * pix = (GRBpixel_t *) array;
+	grb * pix = (grb *) array;
 
 	// Initialize the colors on the array
 	pix[0].r = brightness;
@@ -311,21 +311,12 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
-		WS2812B_STRIP.sendPixels(numPixels, array);
+		myLeds.sendPixels(numPixels, array);
 		delay(100);
 
 		// Rotate the colors based on the pixel's previous color.
 		for (uint16_t i = 0; i < numPixels ; i++) {
 			colorWheel(incLevel, pix[i].r, pix[i].g, pix[i].b);
-if(i==0) {
-  	Serial.print(" ");
-	Serial.print(pix[i].r);
-	Serial.print(",");
-	Serial.print(pix[i].g);
-	Serial.print(",");
-	Serial.print(pix[i].b);
-	Serial.println("");
-}
 		}
 	}
 }
@@ -347,7 +338,7 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3] = {};
-	GRBpixel_t * pix = (GRBpixel_t *) array;
+	grb * pix = (grb *) array;
 
 	// Initialize the colors on the array
 	pix[0].r = brightness;
@@ -363,20 +354,13 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 		const uint8_t oldSREG = SREG;
  		__builtin_avr_cli();
 		for (uint16_t i = 0; i < numPixels ; i++) {
-			WS2812B_STRIP.sendPixels(1, array);
+			myLeds.sendPixels(1, array);
 		}
 		SREG = oldSREG;
 		delay(100);
 
 		// Rotate the colors based on the pixel's previous color.
 		colorWheel(incLevel, pix[0].r, pix[0].g, pix[0].b);
-  	Serial.print(" ");
-	Serial.print(pix[0].r);
-	Serial.print(",");
-	Serial.print(pix[0].g);
-	Serial.print(",");
-	Serial.print(pix[0].b);
-	Serial.println("");
 	}
 }
 
@@ -396,7 +380,7 @@ void jitter()
 
 	// A pixel is 3 bytes
 	uint8_t array[3*arrayDim] = {};
-	GRBpixel_t * pix = (GRBpixel_t *) array;
+	grb * pix = (grb *) array;
 
 	// Set each set of 3 bytes for every pixel
 	for (uint8_t i = 0; i < arrayDim; i++) {
@@ -425,14 +409,14 @@ void jitter()
 			const uint8_t oldSREG = SREG;
 			__builtin_avr_cli();
  			// Display same pattern twice, separated by a fixed pixel.
-			WS2812B_STRIP.sendPixels(numPixels/2, displayPt);
-			WS2812B_STRIP.sendPixels(1, &array[3*maxJitter]);
-			WS2812B_STRIP.sendPixels(numPixels/2-1, displayPt);
+			myLeds.sendPixels(numPixels/2, displayPt);
+			myLeds.sendPixels(1, &array[3*maxJitter]);
+			myLeds.sendPixels(numPixels/2-1, displayPt);
 			SREG = oldSREG;
 
 			delay(300);
 		}
 	}
-	WS2812B_STRIP.clear(numPixels);
+	myLeds.clear(numPixels);
 	delay(1000);
 }
