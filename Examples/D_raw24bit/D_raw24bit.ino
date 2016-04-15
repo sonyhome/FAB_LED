@@ -4,7 +4,8 @@
 /// Copyright (c)2015, 2016 Dan Truong
 ///
 /// This is an example use of the FAB_LED libbrary using 24 bits per pixel,
-/// AKA 3 bytes, one byte per primary color (Green, Red, Blue).
+/// AKA 3 bytes, one byte per primary color. This uses the raw 24 bit interface
+/// to the FAB_LED interface, passing uint8_t * arrays.
 ///
 /// This example works for a regular Arduino board connected to your PC via the
 /// USB port to the Arduino IDE (integrated development environment used to
@@ -15,6 +16,9 @@
 /// allocate a fixed size (their names end witn N). It should work and you will
 /// be able to light up up to MAXINT LEDs, assuming they are powered properly.
 /// When it fails LEDs won't turn on. The program works on an Uno with 255 LEDs.
+///
+/// Note: The display will not work with sk6812 LED strips that use 4 bytes per
+/// pixel.
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -36,27 +40,21 @@ const uint16_t numPixels = 14;
 /// want to use port D2 instead of D6.
 /// For different LED strip models you may want to match them to APA104 or WS2812
 /// LED timings by using the matching implementation class, for example:
-//ws2812<D,6> WS2812B_STRIP;
-//apa104<D,6> WS2812B_STRIP;
-//ws2812b<D,2> WS2812B_STRIP;
-
-ws2812b<D,6> WS2812B_STRIP;
+//ws2812<D,6> myLeds;
+//apa104<D,6> myLeds;
+//apa106<D,6> myLeds;
+ws2812b<D,6> myLeds;
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Declare a pixel as 3 bytes, each holding a color of [0..255]. The
-/// WS2812B LED strips colors are in Green, Red, Blue order. Some other devices
-/// may order Red, Green, Blue. You can redefine this structure to handle those.
-//typedef struct {
-//	uint8_t r;
-//	uint8_t g;
-//	uint8_t b;
-//} pixel_t;
-
-typedef struct {
-	uint8_t g;
-	uint8_t r;
-	uint8_t b;
-} pixel_t;
+/// @brief Declare a pixel as 3 bytes, each holding a color of [0..255].
+/// Match the typedef to your LED strip model.
+/// This type is for convenience when setting up the LED strip. The array used
+/// and sent to the LED strips is still a uint8_t *, where three bytes represent
+/// one pixel.
+//typedef grb pixel_t;
+//typedef grb pixel_t;
+//typedef rgb pixel_t;
+typedef grb pixel_t;
 
 
 
@@ -68,7 +66,7 @@ void holdAndClear(uint16_t on_time, uint16_t off_time)
 	// Wait 1sec, turn off LEDs, wait 200msec
 	delay(on_time);
 	PORTB ^= 1U << 5; // On
-	WS2812B_STRIP.clear(numPixels);
+	myLeds.clear(numPixels);
 	delay(off_time);
 	PORTB ^= 1U << 5; // Off
 }
@@ -95,7 +93,7 @@ void colorN(uint8_t red, uint8_t green, uint8_t blue)
 	}
 
 	// Display the LEDs
-	WS2812B_STRIP.sendPixels(numPixels, array);
+	myLeds.sendPixels(numPixels, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -119,7 +117,7 @@ void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 	pix[pos].b = blue;
 
 	// Display the LEDs
-	WS2812B_STRIP.sendPixels(dim, array);
+	myLeds.sendPixels(dim, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -149,7 +147,7 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 
 	// Display the LEDs
 	for (uint16_t i = 0; i < numPixels; i++) {
-		WS2812B_STRIP.sendPixels(1, array);
+		myLeds.sendPixels(1, array);
 	}
 
 	// Restore the old interrupt state
@@ -203,7 +201,7 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
-		WS2812B_STRIP.sendPixels(numPixels, array);
+		myLeds.sendPixels(numPixels, array);
 		delay(100);
 
 		// Rotate the colors based on the pixel's previous color.
@@ -237,7 +235,7 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 		const uint8_t oldSREG = SREG;
 		__builtin_avr_cli();
 		for (uint16_t i = 0; i < numPixels ; i++) {
-			WS2812B_STRIP.sendPixels(1, array);
+			myLeds.sendPixels(1, array);
 		}
 		SREG = oldSREG;
 		delay(100);
@@ -290,15 +288,15 @@ void jitter()
 			const uint8_t oldSREG = SREG;
 			__builtin_avr_cli();
 			// Display same pattern twice, separated by a fixed pixel.
-			WS2812B_STRIP.sendPixels(numPixels/2, displayPt);
-			WS2812B_STRIP.sendPixels(1, &array[3*maxJitter]);
-			WS2812B_STRIP.sendPixels(numPixels/2-1, displayPt);
+			myLeds.sendPixels(numPixels/2, displayPt);
+			myLeds.sendPixels(1, &array[3*maxJitter]);
+			myLeds.sendPixels(numPixels/2-1, displayPt);
 			SREG = oldSREG;
 
 			delay(300);
 		}
 	}
-	WS2812B_STRIP.clear(numPixels);
+	myLeds.clear(numPixels);
 	delay(1000);
 }
 
@@ -310,7 +308,7 @@ void jitter()
 void setup()
 {
 	// Turn off first 1000 LEDs
-	WS2812B_STRIP.clear(1000);
+	myLeds.clear(1000);
 
 	// Configure a strobe signal to Port B5 for people who
 	// use oscilloscopes to look at the signal sent to the LEDs
