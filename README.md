@@ -229,6 +229,24 @@ Planned Features
 * 2D sprite support:
   I'd like to be able to move an array into a display array, possibly as an overlay, to provide basic animation possibilities.
 
+Validation Tests
+================
+
+This table shows the hardware FAB_LED has been tried on successfully.
+
+Hardware          | Test    | Tester
+---               |:---:    |-----:
+`Controllers`     |         |
+Arduino Uno       | Pass    | sonyhome
+AtTiny85 16MHz    | Pass    | sonyhome
+                  |         |
+`LEDs`            |         |
+ws2812b           | Pass    | sonyhome
+Apa-104           | Pass    | sonyhome
+Apa-106           | Pass    | sonyhome
+sk6812            | Maybe   | trash (tested as 3 byte, not 4 byte)
+
+
 Releases
 ========
 
