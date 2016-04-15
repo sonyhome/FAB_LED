@@ -340,7 +340,14 @@ class avrBitbangLedStrip
 			const uint16_t count,
 			const uint8_t * pixelArray,
 			const uint8_t * palette) __attribute__ ((always_inline));
- 
+
+	template <pixelType> 
+	static inline void sendPixels2D(
+			const uint16_t numPixels,
+			const pixelType * array,
+			const uint16_t X,
+			const uint16_t Y) __attribute__ ((always_inline));
+
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Sends an array of 3 pixels per 16bit words to the LEDs
 	/// This yelds 32K colors, and saves 33% RAM without using a palette. 
