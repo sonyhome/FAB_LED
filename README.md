@@ -137,6 +137,27 @@ Demos
 
 Here you will find examples of uses of the FAB_LED library that are not shipped with the library. These can be personal projects, extensions and features not implemented yet.
 
+170+ LED reel
+-------------
+
+A validation that FAB_LED can address very large LED strips, using very little DRAM.
+A small array holds a pattern in memory, and the `SendPixels()` method is called in a loop
+to repeate the pattern on the LED strip.
+
+![A 170+ LED reel controlled with FAB_LED](Documentation/Readme/Demo/LEDStrip.jpg)  
+
+First 2D use
+------------
+
+This displays an 8x8 pixels picture on an 8x8 pixel array, addressed left to right, top to bottom.
+The drawing was exported to C from Gimp, and the colors retouched: You need less bright, pure colors.  
+The display layout matches the 2D array in memory.
+I plan to support more complex mappings.
+
+![2D LED display with diffuser in front](Documentation/Readme/Demo/2D.jpg)  
+![2D LED board connected on Arduino Uno](Documentation/Readme/Demo/2Dboard.jpg)  
+
+
 Details
 =======
 
