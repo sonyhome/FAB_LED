@@ -86,12 +86,16 @@ enum avrLedStripPort {
 
 // Declares the byte order for every color of the LED strip
 enum pixelFormat {
-	NONE, // Defaults to 3 bytes per pixel of unspecified order
-	RGB,
-	GRB,
-	BGR,
-	RGBW
+	NONE = 0, // Defaults to 3 bytes per pixel of unspecified order
+	RGB = 1,
+	GRB = 2,
+	BGR = 3,
+	RGBW = 4,
+	GRBW = 5,
+	BGRW = 6
 };
+
+#define PIXEL_FORMAT_4B RGBW
 
 // Defines pixel structures for every format supported. It can be used
 // to simplify access to a pixel byte array, or even to send typed pixels
@@ -102,6 +106,20 @@ typedef struct {
 	uint8_t b;
 	uint8_t w;
 } rgbw;
+
+typedef struct {
+	uint8_t g;
+	uint8_t r;
+	uint8_t b;
+	uint8_t w;
+} grbw;
+
+typedef struct {
+	uint8_t b;
+	uint8_t g;
+	uint8_t r;
+	uint8_t w;
+} bgrw;
 
 typedef struct {
 	uint8_t r;
@@ -217,7 +235,7 @@ static const uint8_t blank[3] = {128,128,128};
 template <FAB_TDEF>
 class avrBitbangLedStrip
 {
-	static const uint8_t bytesPerPixel = (colors != RGBW) ? 3 : 4;
+	static const uint8_t bytesPerPixel = (colors < PIXEL_FORMAT_4B) ? 3 : 4;
 
 	public:
 	////////////////////////////////////////////////////////////////////////
@@ -304,6 +322,14 @@ class avrBitbangLedStrip
 	static inline void sendPixels(
 			const uint16_t numPixels,
 			const rgbw * array) __attribute__ ((always_inline));
+
+	static inline void sendPixels(
+			const uint16_t numPixels,
+			const grbw * array) __attribute__ ((always_inline));
+
+	static inline void sendPixels(
+			const uint16_t numPixels,
+			const bgrw * array) __attribute__ ((always_inline));
 
 	static inline void sendPixels(
 			const uint16_t numPixels,
@@ -446,6 +472,8 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 		case GRB: printChar("GRB"); break;
 		case BGR: printChar("BGR"); break;
 		case RGBW: printChar("RGBW"); break;
+		case GRBW: printChar("GRBW"); break;
+		case BGRW: printChar("BGRW"); break;
 		default: printChar("ERROR!"); break;
 	}
 
@@ -558,6 +586,7 @@ avrBitbangLedStrip<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value
 	SREG = oldSREG;
 }
 
+// 3B raw input array
 template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::sendPixels(
@@ -575,13 +604,13 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	SREG = oldSREG;
 }
 
-#define SEND_REMAPPED_PIXELS(numPixels, array)                     \
+// Since colors is a constant, the switch case will convert to 4 sendBytes max.
+#define SEND_REMAPPED_PIXELS(numPixels, array, sendWhite)          \
 		uint8_t oldSREG = SREG;                            \
  		__builtin_avr_cli();                               \
-		for (uint16_t i =0; i < numPixels; i++) {          \
+		for (uint16_t i = 0; i < numPixels; i++) {         \
 			switch (colors) {                          \
 				case RGB:                          \
-				case RGBW:                         \
 					sendBytes(1, &array[i].r); \
 					sendBytes(1, &array[i].g); \
 					sendBytes(1, &array[i].b); \
@@ -596,12 +625,35 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 					sendBytes(1, &array[i].g); \
 					sendBytes(1, &array[i].r); \
 					break;                     \
+				case RGBW:                         \
+					sendBytes(1, &array[i].r); \
+					sendBytes(1, &array[i].g); \
+					sendBytes(1, &array[i].b); \
+					sendWhite;                 \
+					break;                     \
+				case GRBW:                         \
+					sendBytes(1, &array[i].g); \
+					sendBytes(1, &array[i].r); \
+					sendBytes(1, &array[i].b); \
+					sendWhite;                 \
+					break;                     \
+				case BGRW:                         \
+					sendBytes(1, &array[i].b); \
+					sendBytes(1, &array[i].g); \
+					sendBytes(1, &array[i].r); \
+					sendWhite;                 \
+					break;                     \
 				default:                           \
 					break;                     \
 			}                                          \
 		}                                                  \
 		SREG = oldSREG;                                    \
 
+#define sendWhiteMacro sendBytes(1, &array[i].w)
+#define SEND_REMAPPED_PIXELS_4B(numPixels, array) SEND_REMAPPED_PIXELS(numPixels, array, sendWhiteMacro)
+#define SEND_REMAPPED_PIXELS_3B(numPixels, array) SEND_REMAPPED_PIXELS(numPixels, array, )
+
+// 4B struct input arrays
 template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::sendPixels(
@@ -610,9 +662,12 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 {
 	if (colors == RGBW || colors == NONE) {
 		sendPixels(numPixels, (const uint8_t *) array);
+	} else if (colors == RGB) {
+		// Output array is same order but 3B, send as 32bit, which will be converted
+		sendPixels(numPixels, (const uint32_t *) array);
 	} else {
 		// Handle input array of different format than LED strip
-		SEND_REMAPPED_PIXELS(numPixels, array);
+		SEND_REMAPPED_PIXELS_4B(numPixels, array);
 	}
 }
 
@@ -620,15 +675,47 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		const uint16_t numPixels,
-		const rgb * array)
+		const grbw * array)
 {
-	if (colors == RGB || colors == NONE) {
+	if (colors == GRBW || colors == NONE) {
 		sendPixels(numPixels, (const uint8_t *) array);
-	} else if (colors == RGBW) {
+	} else if (colors == GRB) {
 		sendPixels(numPixels, (const uint32_t *) array);
 	} else {
 		// Handle input array of different format than LED strip
-		SEND_REMAPPED_PIXELS(numPixels, array);
+		SEND_REMAPPED_PIXELS_4B(numPixels, array);
+	}
+}
+
+template<FAB_TDEF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::sendPixels(
+		const uint16_t numPixels,
+		const bgrw * array)
+{
+	if (colors == BGRW || colors == NONE) {
+		sendPixels(numPixels, (const uint8_t *) array);
+	} else if (colors == BGR) {
+		sendPixels(numPixels, (const uint32_t *) array);
+	} else {
+		// Handle input array of different format than LED strip
+		SEND_REMAPPED_PIXELS_4B(numPixels, array);
+	}
+}
+
+// 3B struct input arrays
+template<FAB_TDEF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::sendPixels(
+		const uint16_t numPixels,
+		const rgb * array)
+{
+	if (colors == RGB || colors == NONE) {
+		// Input array is native format. No conversion.
+		sendPixels(numPixels, (const uint8_t *) array);
+	} else {
+		// 4B, or 3B pixel array with different byte order, must be converted.
+		SEND_REMAPPED_PIXELS_3B(numPixels, array);
 	}
 }
 
@@ -641,8 +728,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	if (colors == GRB || colors == NONE) {
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else {
-		// Handle input array of different format than LED strip
-		SEND_REMAPPED_PIXELS(numPixels, array);
+		SEND_REMAPPED_PIXELS_3B(numPixels, array);
 	}
 }
 
@@ -655,11 +741,11 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	if (colors == BGR || colors == NONE) {
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else {
-		// Handle input array of different format than LED strip
-		SEND_REMAPPED_PIXELS(numPixels, array);
+		SEND_REMAPPED_PIXELS_3B(numPixels, array);
 	}
 }
 
+// 4B raw input array
 template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::sendPixels(
@@ -671,11 +757,11 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	//cli();
  	__builtin_avr_cli();
 
-	if (colors == RGBW) {
-		// 4 byte per pixel array, print all
+	if (colors >= PIXEL_FORMAT_4B) {
+		// 4 byte per pixel array, send all bytes.
 		sendBytes((const uint16_t) numPixels * bytesPerPixel, (const uint8_t *) pixelArray);
 	} else {
-		// 3 byte per pixel array, print 3 out of 4.
+		// 3 byte per pixel array, send 3 out of 4 bytes.
 		for (int i=0; i< numPixels; i++) {
 			uint8_t * bytes = (uint8_t *) & pixelArray[i];
 			// For LED strips using 3 bytes per color, drop a byte.
@@ -687,6 +773,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	SREG = oldSREG;
 }
 
+// Palette input arrays
 template<FAB_TDEF>
 template <const uint8_t bitsPerPixel>
 inline void
@@ -893,5 +980,29 @@ class sk6812 : public avrBitbangLedStrip<FAB_TVAR_SK6812>
 	~sk6812() {};
 };
 #undef FAB_TVAR_SK6812
+
+
+
+
+////////////////////////////////////////////////////////////////////////////////
+// SK6812B (4 color GRBW LEDs, faster PWM frequency, updated timings)
+/// @note I need to use microsleep to not round up sleep to 1msec.
+////////////////////////////////////////////////////////////////////////////////
+#define SK6812B_1H_CY CYCLES(1210) // 500ns 1210ns-1510ns _----------__
+#define SK6812B_1L_CY CYCLES(200)  // 125ns  200ns-500ns  .    .    .
+#define SK6812B_0H_CY CYCLES(200)  // 125ns  200ns-500ns  _-----_______
+#define SK6812B_0L_CY CYCLES(1210) // 500ns 1210ns-1510ns .    .    .
+#define SK6812B_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
+#define SK6812B_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
+#define FAB_TVAR_SK6812B SK6812B_1H_CY, SK6812B_1L_CY, SK6812B_0H_CY, \
+	SK6812B_0L_CY, SK6812B_MS_REFRESH, portId, portBit, GRBW
+template<avrLedStripPort portId, uint8_t portBit>
+class sk6812b : public avrBitbangLedStrip<FAB_TVAR_SK6812B>
+{
+	public:
+	sk6812b() : avrBitbangLedStrip<FAB_TVAR_SK6812B>() {};
+	~sk6812b() {};
+};
+#undef FAB_TVAR_SK6812B
 
 #endif // FAB_LED_H

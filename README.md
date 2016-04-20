@@ -244,13 +244,13 @@ AtTiny85 16MHz    | Pass    | sonyhome
 ws2812b           | Pass    | sonyhome
 Apa-104           | Pass    | sonyhome
 Apa-106           | Pass    | sonyhome
-sk6812            | Maybe   | trash (tested as 3 byte, not 4 byte)
+sk6812            | Pass    | lukony, trash
 mix ws2812b+Apa106| Pass    | sonyhome
+mix ws2812b+sk6812| Pass    | lukony
 
 Pending
 
 wolfwings - teensy 3.2 120 & 144mhz  
-lukony - ws2812b + sk6812  
 trash - sk6812 (rgbw)  
 
 Releases
