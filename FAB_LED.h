@@ -199,7 +199,7 @@ typedef struct {
 #endif // DUMMY_PORT
 
 // These macros access DDRn and PORTn I/O registers
-//// #ifdef PORTB
+#ifdef PORTB
 // AVR/Arm processors on Arduino platform - They always have a port B
 #define AVR_DDR(id) _AVR_DDR((id))
 #define _AVR_DDR(id) ((id==A) ? DDRA : (id==B) ? DDRB : (id==C) ? DDRC : \
@@ -208,11 +208,38 @@ typedef struct {
 #define _AVR_PORT(id) ((id==A) ? PORTA : (id==B) ? PORTB : (id==C) ? PORTC : \
 		(id==D) ? PORTD : (id==E) ? PORTE : PORTF)
 
-//// #else // not(PORTB)
+#define DELAY_CYCLES(count) __builtin_avr_delay_cycles(count);
+#define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
+#define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
+#define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) |= 1U << portPin
+#define DISABLE_INTERRUPTS __builtin_avr_cli()
+
+#else // not(PORTB)
 // Non Arduino architecture - I dunno if I can configure the I/O ports
 // End-user must redefine AVR_DDR and AVR_PORT
-//// #error "Unsupported Architecture"
-//// #endif // PORTB
+//#error "Unsupported Architecture"
+//#define DELAY_CYCLES(count) __builtin_arm_delay_cycles(count);
+//#define DELAY_CYCLES(count) SysTick_Wait(count)
+#define DELAY_CYCLES(count) delay(count)
+
+#define SET_DDR_HIGH( portId, portPin)
+#define SET_PORT_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
+#define SET_PORT_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
+#define DISABLE_INTERRUPTS cli()
+
+//mov r0, #COUNT
+//L:
+//subs r0, r0, #1
+//bnz L
+#define MACRO_CMB( A , B)           A##B
+#define M_RPT(__N, __macro)         MACRO_CMB(M_RPT, __N)(__macro)
+#define M_RPT0(__macro)
+#define M_RPT1(__macro)             M_RPT0(__macro)   __macro(0)
+#define M_RPT2(__macro)             M_RPT1(__macro)   __macro(1)
+//...
+#define MY_NOP(__N)                 __asm ("nop");
+#define delay150cycles M_RPT(150, MY_NOP);
+#endif // PORTB
 
 
 
@@ -480,10 +507,10 @@ avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
 	// Digital out pin mode
 	// bitSet(portDDR, dataPortPin);
 	// DDR? |= 1U << dataPortPin;
-	AVR_DDR(dataPortId) |= 1U << dataPortPin;
+	SET_DDR_HIGH(dataPortId, dataPortPin);
 
 	// Set port to LOW state
-	AVR_PORT(dataPortId) &= ~(1U << dataPortPin);
+	SET_PORT_LOW(dataPortId, dataPortPin);
 
 	refresh();
 };
@@ -621,13 +648,13 @@ inline void
 avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendFrame(const uint16_t count, bool high)
 {
 	if (high) {
-		AVR_PORT(dataPortId) |= 1U << dataPortPin;      // SDI=1
+		SET_PORT_HIGH(dataPortId, dataPortPin);
 	} else {
-		AVR_PORT(dataPortId) &= ~(1U << dataPortPin);   // SDI=0
+		SET_PORT_LOW(dataPortId, dataPortPin);
 	}
 	for(uint32_t c = 0; c < 32 * count; c++) {
-		AVR_PORT(clockPortId) &= ~(1U << clockPortPin); // CKI=0
-		AVR_PORT(clockPortId) |= 1U << clockPortPin;    // CKI=1
+		SET_PORT_LOW(clockPortId, clockPortPin);
+		SET_PORT_HIGH(clockPortId, clockPortPin);
 	}
 }
 
@@ -646,13 +673,13 @@ avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendBytes(const uint16_t count, const u
 		// To send a bit to SPI, set its value, then transtion clock low-high
 		for(int8_t b=7; b>=0; b--) {
 			const bool bit = (val>>b) & 0x1;
-			AVR_PORT(clockPortId) &= ~(1U << clockPortPin); // CKI=0 --__
+			SET_PORT_LOW(clockPortId, clockPortPin);
  			if (bit) {
-				AVR_PORT(dataPortId) |= 1U << dataPortPin;    // SDI=1
+				SET_PORT_HIGH(dataPortId, dataPortPin);
 			} else {
-				AVR_PORT(dataPortId) &= ~(1U << dataPortPin); // SDI=0
+				SET_PORT_LOW(dataPortId, dataPortPin);
 			}
-			AVR_PORT(clockPortId) |= 1U << clockPortPin;  // CKI=1 __--
+			SET_PORT_HIGH(clockPortId, clockPortPin);
 		}
 	}
 }
@@ -679,24 +706,24 @@ avrBitbangLedStrip<FAB_TVAR>::oneWireSoftwareSendBytes(const uint16_t count, con
 				// Send a ONE
 
 				// HIGH with ASM sbi (2 words, 2 cycles)
-				AVR_PORT(dataPortId) |= 1U << dataPortPin;
+				SET_PORT_HIGH(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
-				__builtin_avr_delay_cycles(high1 - sbiCycles);
+				DELAY_CYCLES(high1 - sbiCycles);
 				//  LOW with ASM cbi (2 words, 2 cycles)
-				AVR_PORT(dataPortId) &= ~(1U << dataPortPin);
+				SET_PORT_LOW(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
-				__builtin_avr_delay_cycles(low1 - cbiCycles);
+				DELAY_CYCLES(low1 - cbiCycles);
 			} else {
 				// Send a ZERO
 
 				// HIGH with ASM sbi (2 words, 2 cycles)
-				AVR_PORT(dataPortId) |= 1U << dataPortPin;
+				SET_PORT_HIGH(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
-				__builtin_avr_delay_cycles(high0 - sbiCycles);
+				DELAY_CYCLES(high0 - sbiCycles);
 				//  LOW with ASM cbi (2 words, 2 cycles)
-				AVR_PORT(dataPortId) &= ~(1U << dataPortPin);
+				SET_PORT_LOW(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
-				__builtin_avr_delay_cycles(low0 - cbiCycles);
+				DELAY_CYCLES(low0 - cbiCycles);
 			}
 		}
 	}
@@ -714,7 +741,7 @@ avrBitbangLedStrip<FAB_TVAR>::clear(const uint16_t numPixels)
 
 		// Disable interupts
 		uint8_t oldSREG = SREG;
- 		__builtin_avr_cli();
+ 		DISABLE_INTERRUPTS;
 
 		const uint8_t array[4] = {0,0,0,0};
 		for( uint16_t i = 0; i < numPixels; i++) {
@@ -732,7 +759,7 @@ avrBitbangLedStrip<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value
 {
 	// Disable interupts
 	uint8_t oldSREG = SREG;
- 		__builtin_avr_cli();
+	DISABLE_INTERRUPTS;
 
 	const uint8_t array[4] = {value, value, value, value};
 	for( uint16_t i = 0; i < numPixels; i++) {
@@ -753,7 +780,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	// Disable interupts
 	uint8_t oldSREG = SREG;
 	// cli();
- 	__builtin_avr_cli();
+ 	DISABLE_INTERRUPTS;
 
 	sendBytes(numPixels * bytesPerPixel, array);
 
@@ -764,7 +791,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 // Since colors is a constant, the switch case will convert to 4 sendBytes max.
 #define SEND_REMAPPED_PIXELS(numPixels, array, sendWhite)          \
 		uint8_t oldSREG = SREG;                            \
- 		__builtin_avr_cli();                               \
+ 		DISABLE_INTERRUPTS;                               \
 		for (uint16_t i = 0; i < numPixels; i++) {         \
 			switch (colors) {                          \
 				case RGB:                          \
@@ -912,7 +939,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	// Disable interupts
 	uint8_t oldSREG = SREG;
 	//cli();
- 	__builtin_avr_cli();
+ 	DISABLE_INTERRUPTS;
 
 	if (colors >= PIXEL_FORMAT_4B) {
 		// 4 byte per pixel array, send all bytes.
@@ -953,7 +980,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 
 	// Disable interupts
 	const uint8_t oldSREG = SREG;
- 	__builtin_avr_cli();
+ 	DISABLE_INTERRUPTS;
 
 	// Send each byte as 1 to 4 pixels
 	uint16_t offset;
@@ -1000,7 +1027,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 
 	// Disable interupts
 	const uint8_t oldSREG = SREG;
- 	__builtin_avr_cli();
+ 	DISABLE_INTERRUPTS;
 
 	// Send each byte as 1 to 4 pixels
 	uint16_t offset;
