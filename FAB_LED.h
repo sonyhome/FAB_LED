@@ -199,7 +199,7 @@ typedef struct {
 #endif // DUMMY_PORT
 
 // These macros access DDRn and PORTn I/O registers
-#ifdef PORTB
+//// #ifdef PORTB
 // AVR/Arm processors on Arduino platform - They always have a port B
 #define AVR_DDR(id) _AVR_DDR((id))
 #define _AVR_DDR(id) ((id==A) ? DDRA : (id==B) ? DDRB : (id==C) ? DDRC : \
@@ -208,11 +208,11 @@ typedef struct {
 #define _AVR_PORT(id) ((id==A) ? PORTA : (id==B) ? PORTB : (id==C) ? PORTC : \
 		(id==D) ? PORTD : (id==E) ? PORTE : PORTF)
 
-#else // not(PORTB)
+//// #else // not(PORTB)
 // Non Arduino architecture - I dunno if I can configure the I/O ports
 // End-user must redefine AVR_DDR and AVR_PORT
-#error "Unsupported Architecture"
-#endif // PORTB
+//// #error "Unsupported Architecture"
+//// #endif // PORTB
 
 
 
