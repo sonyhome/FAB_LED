@@ -259,7 +259,7 @@ It then loops doing multiple display demos, and for each prints out the memory u
 
 <a href="https://www.youtube.com/watch?v=uJeqUJm0ouU"
 target="_blank"><img src="https://i.ytimg.com/vi_webp/uJeqUJm0ouU/mqdefault.webp"
-width="240" height="180" border="10" align="right" /></a>
+width="240" height="180" border="10"/></a>
 
 C_testInfinitePixels
 --------------------
@@ -299,7 +299,8 @@ void rainbow1N(uint8_t brightness) {
   // Wait, and refresh the LED strip
   delay(100);
  }
-}```
+}
+```
 
 D_raw24bit
 ----------
@@ -340,6 +341,38 @@ I plan to support more complex mappings.
 ![2D LED display with diffuser in front](Documentation/Readme/Demo/2D.jpg)  
 ![2D LED board connected on Arduino Uno](Documentation/Readme/Demo/2Dboard.jpg)  
 
+Sk6812
+------
+
+Loial's first attempt at using the FAB_LED library, using sk6812 rgb LEDs.
+
+<a href="https://youtu.be/BiE-9_EtXDg"
+target="_blank"><img src="https://www.youtube.com/upload_thumbnail?v=BiE-9_EtXDg&t=3"
+width="240" height="180" border="10" align="right" /></a>
+
+
+Soldering ws2812b + sk6812-rgbw
+-------------------------------
+Lukas decided to solder back to back LED strips using different color protocols.
+This demo shows that FAB_LED allowed him to send the right pixel formats to each strip,
+from the same pixel array in memory. This allows him to focus drawing the right pattern
+in the array and letting the library handle the display.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/hlfaLeGNjjM" frameborder="0" allowfullscreen></iframe>
+
+Below is the display routine that handles the mixed LEDs with different protocols.
+`pixCut` is the offset where the LED strips were spliced together.
+
+We use grbw (4 byte) pixels so he can set the white channel, which is ignored by ws2812b, but not the sk6812 leds.
+We could have used a grb pixel which uses less RAM, but then there would be no way to control the white color
+in the sk6812 pixels.
+
+```
+  __builtin_avr_cli();
+  myWs2812.sendPixels(pixCut, &grbwPixels[0]);
+  mySk6812b.sendPixels(NUM_PIXELS - pixCut, &grbwPixels[pixCut]);
+  SREG = oldSREG;
+```
 
 Details
 =======
