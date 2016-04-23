@@ -76,6 +76,8 @@ To demonstrate the benefits of FAB_LED, here are apples-to-apples comparison cod
 
 ### Adafruit NeoPixel library
 
+NeoPixel librar requires 2.8kB of Flash memory.
+
 ```
 #include <Adafruit_NeoPixel.h>
 
@@ -96,7 +98,56 @@ void loop() {
 `Sketch uses 2,846 bytes (8%) of program storage space. Maximum is 32,256 bytes.
 Global variables use 40 bytes (1%) of dynamic memory, leaving 2,008 bytes for local variables. Maximum is 2,048 bytes.`
 
+### Adafruit DotStar library
+
+DotStar requires a minimum of 2.8kB or Flash memory.
+
+```
+#include <Adafruit_DotStar.h>
+#include <SPI.h> 
+
+Adafruit_DotStar strip = Adafruit_DotStar(8, 4, 5, DOTSTAR_BRG);
+
+void setup() {
+  strip.begin();
+}
+
+void loop() {
+  strip.setPixelColor(7, 16); 
+  strip.show();
+  delay(1000);
+}
+```
+
+`Sketch uses 2,826 bytes (8%) of program storage space. Maximum is 32,256 bytes.
+Global variables use 37 bytes (1%) of dynamic memory, leaving 2,011 bytes for local variables. Maximum is 2,048 bytes.`
+
+### FastLED
+
+FastLED 3.x uses 3.8kB of Flash memory and 105 bytes of RAM!
+
+```
+#include <FastLED.h>
+CRGB leds[8] = {};
+
+void setup() { 
+  	  FastLED.addLeds<NEOPIXEL, 3>(leds, 8);
+}
+
+void loop() { 
+  leds[7] = CRGB::Red;
+  FastLED.show();
+  delay(1000);
+}
+```
+
+` #warning FastLED version 3.001.001  (Not really a warning, just telling you here.)
+Sketch uses 3,864 bytes (11%) of program storage space. Maximum is 32,256 bytes.
+Global variables use 105 bytes (5%) of dynamic memory, leaving 1,943 bytes for local variables. Maximum is 2,048 bytes.`
+
 ### FAB_LED library
+
+FAB_LED requires only 736B of Flash memory.
 
 ```
 #include <FAB_LED.h>
