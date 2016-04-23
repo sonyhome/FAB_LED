@@ -211,7 +211,7 @@ typedef struct {
 #define DELAY_CYCLES(count) __builtin_avr_delay_cycles(count);
 #define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
 #define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
-#define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) |= 1U << portPin
+#define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin);
 #define DISABLE_INTERRUPTS __builtin_avr_cli()
 
 #else // not(PORTB)
