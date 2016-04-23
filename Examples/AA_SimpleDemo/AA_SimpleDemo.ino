@@ -78,6 +78,8 @@ grb  grbPixels[numPixels] = {};
 ////////////////////////////////////////////////////////////////////////////////
 void setup()
 {
+  // Turn off up to 1000 LEDs.
+  myLedStrip.clear(1000);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -96,5 +98,5 @@ void loop()
   myLedStrip.sendPixels(numPixels,grbPixels);
 
   // Wait to have display lit for a while
-  delay(500);
+  delay(100);
 }
