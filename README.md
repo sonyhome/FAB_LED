@@ -132,6 +132,45 @@ Here you will find photos of how the example code shipped with the FAB_LED libra
 videos to verify the output on your LEDs is as expected. If it is not exactly as expected, you may be using
 the wrong LED model definition.
 
+AA_SimpleDemo
+_____________
+A simple demo that shows how simple it is to address the LEDs with the library.
+The complex part is it calls random() to pick a pixel to update, and random() again for each color, to pick a random color.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/XfvVzaV4vOs" frameborder="0" allowfullscreen></iframe>
+
+<a href="https://www.youtube.com/embed/XfvVzaV4vOs
+" target="_blank"><img src="https://i.ytimg.com/vi/XfvVzaV4vOs/default.jpg"
+width="240" height="180" border="10" /></a>
+
+```
+#include <FAB_LED.h>
+
+// FAB_LED provides many types of LEDs, here we use a WS2812B LED protocol on port D6
+ws2812b<D,6> myLedStrip;
+
+// grb is provided by FAB_LED for convenience. WS2812B natively uses GRB LEDs.
+// other LED types include rgb, grbw, rgbw, bgr... You can also use uint8_t or uint32_t.
+grb pixels[8] = {};
+
+void setup() {
+  myLedStrip.clear(1000);
+}
+
+void loop() {
+  uint16_t pos = random(8);
+  pixels[pos].r = random(16);
+  pixels[pos].g = random(16);
+  pixels[pos].b = random(16);
+
+  // You fully manage your array (unlike other LED libraries which embed it
+  // into their class), and just send it when you're ready to show it.
+  myLedStrip.sendPixels(8, pixels);
+
+  delay(100);
+}
+```
+
 Demos
 =====
 
@@ -237,20 +276,21 @@ This table shows the hardware FAB_LED has been tried on successfully.
 Hardware          | Test    | Tester
 ---               |:---:    |-----:
 `Controllers`     |         |
-Arduino Uno       | Pass    | sonyhome
-AtTiny85 16MHz    | Pass    | sonyhome
+Arduino Uno       | Pass    | Sonyhome
+AtTiny85 16MHz    | Pass    | Sonyhome
                   |         |
 `LEDs`            |         |
-ws2812b           | Pass    | sonyhome
-Apa-104           | Pass    | sonyhome
-Apa-106           | Pass    | sonyhome
-sk6812            | Pass    | lukony, trash
-mix ws2812b+Apa106| Pass    | sonyhome
-mix ws2812b+sk6812| Pass    | lukony
+ws2812b           | Pass    | Sonyhome
+Apa-104           | Pass    | Sonyhome
+Apa-106           | Pass    | Sonyhome
+sk6812b rgb       | Pass    | Loial
+sk6812b grbw      | Pass    | Lukony
+mix ws2812b+Apa106| Pass    | Sonyhome
+mix ws2812b+sk6812| Pass    | Lukony
 
 Pending
 
-wolfwings - teensy 3.2 120 & 144mhz  
+mblade, wolfwings - ARM0 teensy 3.2 120 & 144mhz  
 trash - sk6812 (rgbw)  
 
 Releases
