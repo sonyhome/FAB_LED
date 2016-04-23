@@ -512,7 +512,9 @@ avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
 	// Set port to LOW state
 	SET_PORT_LOW(dataPortId, dataPortPin);
 
-	refresh();
+//// DEBUG - For some reason this calls delay() and hangs the CPU! Also can't Serial.print()
+//// Most likely called BEFORE setup() loop.
+////	refresh();
 };
 
 template<FAB_TDEF>
@@ -552,56 +554,56 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 
 	printChar(" REFRESH MSEC=");
 	printInt(minMsRefresh);
-	printChar("\nDATA ");
 
+	printChar("\nDATA_PORT ");
 	switch(dataPortId) {
 		case A:
-			printChar("PORT A.");
+			printChar("A.");
 			break;
 		case B:
-			printChar("PORT B.");
+			printChar("B.");
 			break;
 		case C:
-			printChar("PORT C.");
+			printChar("C.");
 			break;
 		case D:
-			printChar("PORT D.");
+			printChar("D.");
 			break;
 		case E:
-			printChar("PORT E.");
+			printChar("E.");
 			break;
 		case F:
-			printChar("PORT F.");
+			printChar("F.");
 			break;
 		default:
-			printChar("PORT UNKNOWN.");
+			printChar("UNKNOWN.");
 	}
 	printInt(dataPortPin);
 	printChar(", ");
-	if (protocol >= PROTOCOL_SPI) {
-		printChar("CLOCK ");
 
+	if (protocol >= PROTOCOL_SPI) {
+		printChar("CLOCK_PORT ");
 		switch(clockPortId) {
 			case A:
-				printChar("PORT A.");
+				printChar("A.");
 				break;
 			case B:
-				printChar("PORT B.");
+				printChar("B.");
 				break;
 			case C:
-				printChar("PORT C.");
+				printChar("C.");
 				break;
 			case D:
-				printChar("PORT D.");
+				printChar("D.");
 				break;
 			case E:
-				printChar("PORT E.");
+				printChar("E.");
 				break;
 			case F:
-				printChar("PORT F.");
+				printChar("F.");
 				break;
 			default:
-				printChar("PORT UNKNOWN.");
+				printChar("UNKNOWN.");
 		}
 		printInt(clockPortPin);
 		printChar(", ");
