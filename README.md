@@ -134,14 +134,15 @@ the wrong LED model definition.
 
 AA_SimpleDemo
 _____________
-A simple demo that shows how simple it is to address the LEDs with the library.
-The complex part is it calls random() to pick a pixel to update, and random() again for each color, to pick a random color.
+This example shows how simple it is to address the LEDs with this library. With about 10 lines of code, we have a cool effect, and
+the complex part is it calls random() to pick a pixel to update, and random() again for each color, to pick a random color.
+There are actually only 4 lines that are related to using the LED library.
 
 <iframe width="560" height="315" src="https://www.youtube.com/embed/XfvVzaV4vOs" frameborder="0" allowfullscreen></iframe>
 
-<a href="https://www.youtube.com/embed/XfvVzaV4vOs
-" target="_blank"><img src="https://i.ytimg.com/vi/XfvVzaV4vOs/default.jpg"
-width="240" height="180" border="10" /></a>
+<a href="https://www.youtube.com/embed/XfvVzaV4vOs"
+target="_blank"><img src="https://i.ytimg.com/vi/XfvVzaV4vOs/default.jpg"
+width="240" height="180" border="10" align="right" /></a>
 
 ```
 #include <FAB_LED.h>
@@ -170,6 +171,149 @@ void loop() {
   delay(100);
 }
 ```
+
+A_testPixelStruct
+-----------------
+This example demonstrates the use of the LED structures that allow you to access directly the red, green and blue components of each pixel.
+The structures abstract the pixels, so even though we offer multiple formats (rgb, grb, rgbw, etc.) they actually all will work with your
+LED strip, no matter what is the natural order of the colors for your LED model.
+
+It is however more efficient to use the natural order (it is faster).
+You can use this example to detect the model of your LED strip, as the default display is red, green, blue, white.
+
+The setup() routine sets up the different pixel type arrays with a specific color for each.
+They are shown in order so that red shows first, then green, etc.
+
+The code excerpt below is simpler than the actual code. The code actually has one routine per LED model,
+and the main loop calls one of them, with all the others commented out.
+
+<a href="https://www.youtube.com/watch?v=fI9f-9K0C0M"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/fI9f-9K0C0M/mqdefault.webp"
+width="240" height="180" border="10" align="right" /></a>
+
+```
+#include <FAB_LED.h>
+ws2812b<D,6> myWs2812;
+
+ws2812b<D,6> myWs2812;
+
+#define NUM_PIXELS 40
+
+rgbw rgbwPixels[NUM_PIXELS] = {};
+grbw grbwPixels[NUM_PIXELS] = {};
+rgb  rgbPixels[NUM_PIXELS] = {};
+grb  grbPixels[NUM_PIXELS] = {};
+
+
+void setup() {
+  for (int i=0; i < 40; i++) {
+  // Initialize rgb array to show as red strip
+  rgbPixels[i].r = 16;
+
+  // Initialise grb array to show as green
+  grbPixels[i].g = 16;
+
+  // Initialize grbw array to show as blue
+  rgbwPixels[i].b = 16;
+
+  // Initialize rgbw array to show as white
+  grbwPixels[i].r = 16;
+  grbwPixels[i].g = 16;
+  grbwPixels[i].b = 16;
+  }
+}
+
+loop() {
+  mySk6812.clear(1000);
+  delay(500);
+
+  showWs2812b();
+}
+
+void showWs2812b(void) {
+  // Show rgb array (red)
+  myWs2812.sendPixels(40, rgbPixels);
+  // Wait to have display lit for a while
+  delay(1000);
+
+  // Show grb array (green)
+  myWs2812.sendPixels(40, grbPixels);
+  delay(1000);
+
+  // Show rgbw array (blue)
+  myWs2812.sendPixels(40, rgbwPixels);
+  delay(1000);
+
+  // Show grbw array (white)
+  myWs2812.sendPixels(40 ,grbwPixels);
+  delay(1000);
+}
+```
+
+B_DebugConsole
+--------------
+This example prints informations on the serial console using the `Serial` class.
+On startup, it displays the properties of the LED protocol used by the program.
+
+It then loops doing multiple display demos, and for each prints out the memory used by the pixel array needed for that mode.
+
+<a href="https://www.youtube.com/watch?v=uJeqUJm0ouU"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/uJeqUJm0ouU/mqdefault.webp"
+width="240" height="180" border="10" align="right" /></a>
+
+C_testInfinitePixels
+--------------------
+
+This example shows some simple LED animations that use up almost no RAM, that can be applied to an almost infinite number of pixels.
+By default the test is configured to drive 1000 pixels, and in practice the LED library as is is limited to 64K pixels per port.
+For example, the rainbow effect provided stores only one pixel in RAM to drive all 1000 pixels of the strip (excerpt of the code below as proof).
+
+<a href="https://www.youtube.com/watch?v=NiCUeifl74Y"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/NiCUeifl74Y/mqdefault.webp"
+width="240" height="180" border="10" align="right" /></a>
+
+```
+void rainbow1N(uint8_t brightness) {
+ rgb pix[1];
+
+ pix[0].r = brightness;
+ pix[0].g = 0;
+ pix[0].b = 0;
+
+ for (uint16_t iter = 0; iter < 20 ; iter++) {
+
+  const uint8_t oldSREG = SREG;
+  __builtin_avr_cli();
+
+  // This loop draws all the pixels of the LED strip
+  for (uint16_t i = 0; i < numPixels ; i++) {
+   myLeds.sendPixels(1, pix);
+
+   // Change the colors based on the pixel's previous color
+   // by walking each color of the rainbow
+   colorWheel(1, pix[0].r, pix[0].g, pix[0].b);
+  }
+
+  SREG = oldSREG;
+
+  // Wait, and refresh the LED strip
+  delay(100);
+ }
+}```
+
+D_raw24bit
+----------
+This is an earlier example that shows how to use the library with basic uint8_t arrays,
+instead of using the predefined pixel types like grb, etc.
+
+In this case the programmer has to know and handle exactly the position of each pixel colors
+and do the math for each pixel offset in the array. It's not very complex but a bit more
+error prone, and much less portable across LED strip protocols.
+
+E_FABLED_size
+-------------
+This schema is meant to compare the compiled size of a program using FAB_LED vs using Adafruit's library, vs using FastLED.
+
 
 Demos
 =====
