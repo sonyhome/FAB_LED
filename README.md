@@ -347,8 +347,8 @@ Sk6812
 Loial's first attempt at using the FAB_LED library, using sk6812 rgb LEDs.
 
 <a href="https://youtu.be/BiE-9_EtXDg"
-target="_blank"><img src="https://www.youtube.com/upload_thumbnail?v=BiE-9_EtXDg&t=3"
-width="240" height="180" border="10" align="right" /></a>
+target="_blank"><img src="https://i.ytimg.com/vi_webp/BiE-9_EtXDg/mqdefault.webp"
+width="240" height="180" border="10" /></a>
 
 
 Soldering ws2812b + sk6812-rgbw
@@ -358,7 +358,9 @@ This demo shows that FAB_LED allowed him to send the right pixel formats to each
 from the same pixel array in memory. This allows him to focus drawing the right pattern
 in the array and letting the library handle the display.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/hlfaLeGNjjM" frameborder="0" allowfullscreen></iframe>
+<a href="https://www.youtube.com/embed/hlfaLeGNjjM"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/hlfaLeGNjjM/mqdefault.webp"
+width="240" height="180" border="10" align="right" /></a>
 
 Below is the display routine that handles the mixed LEDs with different protocols.
 `pixCut` is the offset where the LED strips were spliced together.
