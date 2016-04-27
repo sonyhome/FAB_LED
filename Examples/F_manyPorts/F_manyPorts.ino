@@ -50,7 +50,7 @@
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs at
 /// once. Maybe no more than 8 at full power (max is 60mA at 5V is 0.3Watt/LED).
-const uint16_t numPixels = 8;
+const uint16_t numPixels = 8*8;
 const uint16_t maxBrightness = 16;
 
 // Custom LED declaration
@@ -168,7 +168,7 @@ void setup()
 void loop()
 {
   // Update the LED strips one after the other
-  for(uint8_t i = 0; i < 2*10; i++) {
+  for(uint8_t i = 0; i < 2*numPixels; i++) {
     grbPixels[i%numPixels].r = random(maxBrightness);
     grbPixels[i%numPixels].g = random(maxBrightness);
     grbPixels[i%numPixels].b = random(maxBrightness);
@@ -181,9 +181,8 @@ void loop()
     strip5.sendPixels(numPixels, grbPixels);
     strip6.sendPixels(numPixels, grbPixels);
     strip7.sendPixels(numPixels, grbPixels);
-
-    delay(100);
   }
+  delay(1000);
 
   // Turn off up to 1000 LEDs.
   strip0.clear(1000);
@@ -198,14 +197,14 @@ void loop()
 
   // update LEDs all at the same time, but using low level code
   // to set ports directly. This works as we interlace at bit level.
-  for(uint8_t i = 0; i < 2*10; i++) {
+  for(uint8_t i = 0; i < 2*numPixels; i++) {
     grbPixels[i%numPixels].r = random(maxBrightness);
     grbPixels[i%numPixels].g = random(maxBrightness);
     grbPixels[i%numPixels].b = random(maxBrightness);
 
     parallelPixel(D, 3*numPixels, (uint8_t*) grbPixels);
-    delay(100);
   }
+  delay(1000);
 
   // Turn off up to 1000 LEDs.
   strip0.clear(1000);
@@ -225,7 +224,7 @@ void loop()
   // you can drive in parallel.
   // For ws2812b, it takes too many cycles to update a pixel byte
   // so the LED strip resets. A byte takes 8 * ( 6+2+?) > 64 cycles (4 usec)
-  for(uint8_t i = 0; i < 2*10; i++) {
+  for(uint8_t i = 0; i < 2*numPixels; i++) {
     grbPixels[i%numPixels].r = random(maxBrightness);
     grbPixels[i%numPixels].g = random(maxBrightness);
     grbPixels[i%numPixels].b = random(maxBrightness);
@@ -246,8 +245,8 @@ void loop()
     SREG = oldSREG;
 
     // Wait to have display lit for a while
-    delay(100);
   }
+  delay(1000);
 
   // Turn off up to 1000 LEDs.
   strip0.clear(1000);
