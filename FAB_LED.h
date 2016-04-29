@@ -97,11 +97,13 @@ enum pixelFormat {
 
 // Declares the type of hardware protocol for the LED strip
 enum ledProtocol {
-	ONE_WIRE_BITBANG = 1, // ws2812 and any LED with single data line
-	ONE_WIRE_PWM = 2,     // Not implemented
-	ONE_WIRE_UART = 3,    // Not implemented
-	SPI_BITBANG = 4,      // APA-102 and any LED with data and clock line
-	SPI_HARDWARE = 5      // Not implemented
+	ONE_PORT_BITBANG = 1,   // Any LED with single data line
+	TWO_PORT_SPLIT_BITBANG = 2, // Same, but update 2 ports in parallel, sending 1/2 the array to one port, and the other 1/2 to the other
+	TWO_PORT_INTLV_BITBANG = 3, // Same, but update 2 ports in parallel, interleaving the pixels of the array
+	ONE_PORT_PWM = 4,       // Not implemented
+	ONE_PORT_UART = 5,      // Not implemented
+	SPI_BITBANG = 6,        // APA-102 and any LED with data and clock line
+	SPI_HARDWARE = 7        // Not implemented
 };
 
 #define PIXEL_FORMAT_4B RGBW
@@ -208,8 +210,10 @@ typedef struct {
 #define _AVR_PORT(id) ((id==A) ? PORTA : (id==B) ? PORTB : (id==C) ? PORTC : \
 		(id==D) ? PORTD : (id==E) ? PORTE : PORTF)
 
-#define DELAY_CYCLES(count) __builtin_avr_delay_cycles(count);
+#define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count);
 #define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
+#define FAB_DDR( portId) AVR_DDR(portId)
+#define FAB_PORT(portId) AVR_PORT(portId)
 #define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
 #define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin);
 #define DISABLE_INTERRUPTS __builtin_avr_cli()
@@ -218,11 +222,13 @@ typedef struct {
 // Non Arduino architecture - I dunno if I can configure the I/O ports
 // End-user must redefine AVR_DDR and AVR_PORT
 //#error "Unsupported Architecture"
-//#define DELAY_CYCLES(count) __builtin_arm_delay_cycles(count);
-//#define DELAY_CYCLES(count) SysTick_Wait(count)
-#define DELAY_CYCLES(count) delay(count)
+//#define DELAY_CYCLES(count) if (count > 0) __builtin_arm_delay_cycles(count);
+//#define DELAY_CYCLES(count) if (count > 0) SysTick_Wait(count)
+#define DELAY_CYCLES(count) if (count > 0) delay(count)
 
 #define SET_DDR_HIGH( portId, portPin)
+#define FAB_DDR( portId) AVR_DDR(portId)
+#define FAB_PORT(portId) AVR_PORT(portId)
 #define SET_PORT_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
 #define SET_PORT_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
 #define DISABLE_INTERRUPTS cli()
@@ -337,7 +343,14 @@ class avrBitbangLedStrip
 	/// @brief Implements sendBytes for the 1-wire protocol (WS2812B)
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	oneWireSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+	onePortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+	__attribute__ ((always_inline));
+
+	////////////////////////////////////////////////////////////////////////
+	/// @brief Implements sendBytes for the 8-wire protocol (WS2812B)
+	////////////////////////////////////////////////////////////////////////
+	static inline void
+	twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
@@ -507,14 +520,28 @@ avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
 	// Digital out pin mode
 	// bitSet(portDDR, dataPortPin);
 	// DDR? |= 1U << dataPortPin;
-	SET_DDR_HIGH(dataPortId, dataPortPin);
-
-	// Set port to LOW state
-	SET_PORT_LOW(dataPortId, dataPortPin);
-
-//// DEBUG - For some reason this calls delay() and hangs the CPU! Also can't Serial.print()
-//// Most likely called BEFORE setup() loop.
-////	refresh();
+	switch (protocol) {
+		case TWO_PORT_SPLIT_BITBANG:
+		case TWO_PORT_INTLV_BITBANG:
+			// Init two ports as out, set to low state
+			SET_DDR_HIGH(dataPortId,  dataPortPin);
+			SET_DDR_HIGH(clockPortId, clockPortPin);
+			SET_PORT_LOW(dataPortId,  dataPortPin);
+			SET_PORT_LOW(clockPortId, clockPortPin);
+			break;
+		case SPI_BITBANG:
+			// Init both ports as out
+			SET_DDR_HIGH(dataPortId, dataPortPin);
+			SET_DDR_HIGH(clockPortId, clockPortPin);
+			// SPI: Reset LED strip to accept a refresh
+			spiSoftwareSendFrame(16, 0);
+			break;
+		default:
+			// Init data port as out, set to low state
+			SET_DDR_HIGH(dataPortId, dataPortPin);
+			SET_PORT_LOW(dataPortId, dataPortPin);
+			break;
+	}
 };
 
 template<FAB_TDEF>
@@ -610,20 +637,26 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 	}
 
 	switch(protocol) {
-		case ONE_WIRE_BITBANG:
-			printChar("ONE-WIRE (bitbang)");
+		case ONE_PORT_BITBANG:
+			printChar("ONE-PORT (bitbang)");
 			break;
-		case ONE_WIRE_PWM:
-			printChar("ONE-WIRE (PWM)");
+		case TWO_PORT_SPLIT_BITBANG:
+			printChar("TWO-PORT-SPLIT (bitbang)");
 			break;
-		case ONE_WIRE_UART:
-			printChar("ONE-WIRE (UART)");
+		case TWO_PORT_INTLV_BITBANG:
+			printChar("TWO-PORT-INTERLEAVED (bitbang)");
+			break;
+		case ONE_PORT_PWM:
+			printChar("ONE-PORT (PWM)");
+			break;
+		case ONE_PORT_UART:
+			printChar("ONE-PORT (UART)");
 			break;
 		case SPI_BITBANG:
-			printChar("TWO-WIRE SPI (bitbang)");
+			printChar("SPI (bitbang)");
 			break;
 		case SPI_HARDWARE:
-			printChar("TWO-WIRE SPI (hardware)");
+			printChar("SPI (hardware)");
 			break;
 		default:
 			printChar("PROTOCOL UNKNOWN");
@@ -636,8 +669,13 @@ inline void
 avrBitbangLedStrip<FAB_TVAR>::sendBytes(const uint16_t count, const uint8_t * array)
 {
 	switch (protocol) {
-		case ONE_WIRE_BITBANG:
-			oneWireSoftwareSendBytes(count, array);
+		case ONE_PORT_BITBANG:
+			onePortSoftwareSendBytes(count, array);
+			break;
+		case TWO_PORT_SPLIT_BITBANG:
+		case TWO_PORT_INTLV_BITBANG:
+			// Note: the function will detect and handle the 2 modes
+			twoPortSoftwareSendBytes(count, array);
 			break;
 		case SPI_BITBANG:
 			spiSoftwareSendBytes(count, array);
@@ -686,9 +724,173 @@ avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendBytes(const uint16_t count, const u
 	}
 }
 
+/// @brief sends the array split across two ports each having half the LED strip to illuminate.
+/// To achieve this, we repurpose the clock port used for SPI as a second data port.
+/// We support two protocols:
+/// TWO_PORT_SPLIT_BITBANG: The array is split into 2 halves sent each sent to one of the ports
+/// TWO_PORT_INTLV_BITBANG: The array is interleaved and each pixel of 3 byte is sent to the next port
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::oneWireSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+{
+	const int sbiCycles = 2;
+	const int cbiCycles = 2;
+	// If split mode, we send a block of half size
+	const uint16_t blockSize = (protocol == TWO_PORT_SPLIT_BITBANG) ? count/2 : count;
+	// Number of bytes per pixel
+	const uint8_t bpp = (colors < RGBW) ? 3 : 4;
+	// Stride is two for interlacing to jump pixels going to the other port
+	const uint8_t stride = (protocol == TWO_PORT_SPLIT_BITBANG) ? 1 : 2;
+	const uint8_t increment = stride * bpp;
+
+	// Loop to scan all pixels, potentially skipping every other pixel, or scanning 1/2 the pixels
+	// based on the display protocol used.
+	for(uint16_t pix = 0; pix < blockSize; pix += increment) {
+		// Loop to send 3 or 4 bytes of a pixel to the same port
+		for(uint16_t pos = pix; pos < pix+bpp; pos++) {
+			for(int8_t bit = 7; bit >= 0; bit--) {
+				const uint8_t mask = 1 << bit;
+
+				volatile bool isbitDhigh = array[pos] & mask;
+	
+				volatile bool isbitChigh = (protocol == TWO_PORT_SPLIT_BITBANG) ?
+					array[pos + blockSize] & mask : // split: pixel is blockSize away.
+					array[pos + bpp] & mask;        // interleaved: pixel is next one.
+
+				if (isbitDhigh) SET_PORT_HIGH(dataPortId, dataPortPin);
+				if (isbitChigh) SET_PORT_HIGH(clockPortId, clockPortPin);
+
+				if (!isbitDhigh) {
+					SET_PORT_HIGH(dataPortId, dataPortPin);
+					DELAY_CYCLES(high0 - sbiCycles);
+					SET_PORT_LOW(dataPortId, dataPortPin);
+				}
+				if (!isbitChigh) {
+					SET_PORT_HIGH(clockPortId, clockPortPin);
+					DELAY_CYCLES(high0 - sbiCycles);
+					SET_PORT_LOW(clockPortId, clockPortPin);
+				}
+				DELAY_CYCLES(high1 - 2*sbiCycles);
+				SET_PORT_LOW(dataPortId, dataPortPin);
+				SET_PORT_LOW(clockPortId, clockPortPin);
+				DELAY_CYCLES(low1 - 2*cbiCycles);
+			}
+		}
+	}
+}
+
+#if 0
+template<FAB_TDEF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+{
+	const uint16_t blockSize = count/2;
+
+	for(uint16_t pos = 0; pos < blockSize; pos++) {
+		for(int8_t bit = 7; bit >= 0; bit--) {
+			const uint8_t mask = 1 << bit;
+			const bool isbitDhigh = array[0*blockSize + pos] & mask;
+			const bool isbitChigh = array[1*blockSize + pos] & mask;
+
+			if (isbitDhigh) SET_PORT_HIGH(dataPortId, dataPortPin);
+			if (isbitChigh) SET_PORT_HIGH(clockPortId, clockPortPin);
+
+			if (!isbitDhigh) {
+				SET_PORT_HIGH(dataPortId, dataPortPin);
+				//DELAY_CYCLES(high0 - sbiCycles);
+				DELAY_CYCLES(0);
+				SET_PORT_LOW(dataPortId, dataPortPin);
+			}
+			if (!isbitChigh) {
+				SET_PORT_HIGH(clockPortId, clockPortPin);
+				//DELAY_CYCLES(high0 - sbiCycles);
+				DELAY_CYCLES(0);
+				SET_PORT_LOW(clockPortId, clockPortPin);
+			}
+			DELAY_CYCLES(0);
+			SET_PORT_LOW(dataPortId, dataPortPin);
+			SET_PORT_LOW(clockPortId, clockPortPin);
+			DELAY_CYCLES(0);
+		}
+	}
+}
+#endif
+
+#if 0
+template<FAB_TDEF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+{
+	const uint16_t bytesPerPixel = 3; // (colors < RGBW) ? 3 : 4;
+//	const int sbiCycles = 2;
+//	const int cbiCycles = 2;
+
+	for(uint16_t c = 0; c < count/8/bytesPerPixel; c++) {
+		const uint16_t baseOffset = c * 8 * bytesPerPixel;
+
+		for(uint8_t byte = 0; byte < bytesPerPixel; byte++) {
+			const uint16_t byteOffset = baseOffset + byte; // * 8 ?
+
+			for(int8_t bit = 7; bit >= 0; bit--) {
+				uint8_t ones = 0;
+				for(uint8_t pin = 6; pin < 7; pin++) {
+					// pixels for each port pins are interlaced:
+					const uint16_t pinOffset = bytesPerPixel * pin;
+					// pixels for each port pins are in contiguous blocks.
+					//const uint16_t pinOffset = count/8 * pin;
+					const uint8_t val = array[byteOffset + pinOffset];
+					const bool isHigh = val & (1<<bit);
+					ones |= isHigh << pin;
+				}
+				FAB_PORT(dataPortId) = 0xFF;
+				//DELAY_CYCLES(high0 - sbiCycles);
+				// Set zeroes to low
+				FAB_PORT(dataPortId) &= ones;
+				DELAY_CYCLES(8); // high1 - sbiCycles - high0);
+				// Set ones to low
+				FAB_PORT(dataPortId) &= 0x00;
+				//DELAY_CYCLES(low0 - cbiCycles);
+			}
+		}
+	}
+}
+#endif
+
+#if 0
+template<FAB_TDEF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+{
+	const uint16_t blockSize = count /2;
+
+	for(uint16_t pos = 0; pos < blockSize; pos++) {
+//		uint8_t val = array[pos];
+		for(int8_t bit = 7; bit >= 0; bit--) {
+
+			for(uint8_t pin = 5; pin < 7; pin++) {
+				//const uint8_t val = array[pos];
+				const uint8_t val = array[(pin-5)*blockSize + pos];
+				const bool bitHigh = (val >> bit) & 0x1;
+
+				if (bitHigh) {
+					SET_PORT_HIGH(dataPortId, pin);
+				} else {
+					SET_PORT_HIGH(dataPortId, pin);
+					DELAY_CYCLES(2);
+					SET_PORT_LOW(dataPortId, pin);
+				}
+			}
+			DELAY_CYCLES(10);
+			FAB_PORT(dataPortId) = 0x0;
+//			DELAY_CYCLES(4);
+		}
+	}
+}
+#endif
+
+template<FAB_TDEF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
 	const int sbiCycles = 2;
 	const int cbiCycles = 2;
@@ -1117,7 +1319,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 #endif
 
 #define FAB_TVAR_WS2812B WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRB, ONE_WIRE_BITBANG
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRB, ONE_PORT_BITBANG
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
 class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
 {
@@ -1126,6 +1328,46 @@ class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
 	~ws2812b() {};
 };
 #undef FAB_TVAR_WS2812B
+
+
+////////////////////////////////////////////////////////////////////////////////
+// WS2812BS (Use all 8 pins of a port to send the array interlaced, in parallel)
+// If you choose port D, pixel 0 goes to D0, 1 to D1... 7 to D7. Then Pixel 8
+// goes to D0, 9 to D1.. 15 to D7, etc.
+// This method is much faster to update a lot of pixels, as it takes advantage
+// of the bitbanging delays to push pixels to the LED strips connected to the
+// other port pins.
+////////////////////////////////////////////////////////////////////////////////
+#define FAB_TVAR_WS2812BS WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, GRB, TWO_PORT_SPLIT_BITBANG
+template<avrLedStripPort dataPortId1, uint8_t dataPortBit1,avrLedStripPort dataPortId2, uint8_t dataPortBit2>
+class ws2812bs : public avrBitbangLedStrip<FAB_TVAR_WS2812BS>
+{
+	public:
+	ws2812bs() : avrBitbangLedStrip<FAB_TVAR_WS2812BS>() {};
+	~ws2812bs() {};
+};
+#undef FAB_TVAR_WS2812BS
+
+
+////////////////////////////////////////////////////////////////////////////////
+// WS2812BI (Use all 8 pins of a port to send the array interlaced, in parallel)
+// If you choose port D, pixel 0 goes to D0, 1 to D1... 7 to D7. Then Pixel 8
+// goes to D0, 9 to D1.. 15 to D7, etc.
+// This method is much faster to update a lot of pixels, as it takes advantage
+// of the bitbanging delays to push pixels to the LED strips connected to the
+// other port pins.
+////////////////////////////////////////////////////////////////////////////////
+#define FAB_TVAR_WS2812BI WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, GRB, TWO_PORT_INTLV_BITBANG
+template<avrLedStripPort dataPortId1, uint8_t dataPortBit1,avrLedStripPort dataPortId2, uint8_t dataPortBit2>
+class ws2812bi : public avrBitbangLedStrip<FAB_TVAR_WS2812BI>
+{
+	public:
+	ws2812bi() : avrBitbangLedStrip<FAB_TVAR_WS2812BI>() {};
+	~ws2812bi() {};
+};
+#undef FAB_TVAR_WS2812BI
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1138,7 +1380,7 @@ class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
 #define WS2812_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
 #define WS2812_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_WS2812 WS2812_1H_CY, WS2812_1L_CY, WS2812_0H_CY, \
-	WS2812_0L_CY, WS2812_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRB, ONE_WIRE_BITBANG
+	WS2812_0L_CY, WS2812_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRB, ONE_PORT_BITBANG
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
 class ws2812 : public avrBitbangLedStrip<FAB_TVAR_WS2812>
 {
@@ -1159,7 +1401,7 @@ class ws2812 : public avrBitbangLedStrip<FAB_TVAR_WS2812>
 #define APA104_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
 #define APA104_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_APA104 APA104_1H_CY, APA104_1L_CY, APA104_0H_CY, \
-	APA104_0L_CY, APA104_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRB, ONE_WIRE_BITBANG
+	APA104_0L_CY, APA104_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRB, ONE_PORT_BITBANG
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
 class apa104 : public avrBitbangLedStrip<FAB_TVAR_APA104>
 {
@@ -1181,7 +1423,7 @@ class apa104 : public avrBitbangLedStrip<FAB_TVAR_APA104>
 #define APA106_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
 #define APA106_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_APA106 APA106_1H_CY, APA106_1L_CY, APA106_0H_CY, \
-	APA106_0L_CY, APA106_MS_REFRESH, dataPortId, dataPortBit, A, 0, RGB, ONE_WIRE_BITBANG
+	APA106_0L_CY, APA106_MS_REFRESH, dataPortId, dataPortBit, A, 0, RGB, ONE_PORT_BITBANG
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
 class apa106 : public avrBitbangLedStrip<FAB_TVAR_APA106>
 {
@@ -1204,7 +1446,7 @@ class apa106 : public avrBitbangLedStrip<FAB_TVAR_APA106>
 #define SK6812_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
 #define SK6812_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_SK6812 SK6812_1H_CY, SK6812_1L_CY, SK6812_0H_CY, \
-	SK6812_0L_CY, SK6812_MS_REFRESH, dataPortId, dataPortBit, A, 0, RGBW, ONE_WIRE_BITBANG
+	SK6812_0L_CY, SK6812_MS_REFRESH, dataPortId, dataPortBit, A, 0, RGBW, ONE_PORT_BITBANG
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
 class sk6812 : public avrBitbangLedStrip<FAB_TVAR_SK6812>
 {
@@ -1228,7 +1470,7 @@ class sk6812 : public avrBitbangLedStrip<FAB_TVAR_SK6812>
 #define SK6812B_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
 #define SK6812B_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_SK6812B SK6812B_1H_CY, SK6812B_1L_CY, SK6812B_0H_CY, \
-	SK6812B_0L_CY, SK6812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRBW, ONE_WIRE_BITBANG
+	SK6812B_0L_CY, SK6812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, GRBW, ONE_PORT_BITBANG
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
 class sk6812b : public avrBitbangLedStrip<FAB_TVAR_SK6812B>
 {

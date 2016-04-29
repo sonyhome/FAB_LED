@@ -50,7 +50,7 @@
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs at
 /// once. Maybe no more than 8 at full power (max is 60mA at 5V is 0.3Watt/LED).
-const uint16_t numPixels = 8*8;
+const uint16_t numPixels = 4*8;
 const uint16_t maxBrightness = 16;
 
 // Custom LED declaration
@@ -66,34 +66,37 @@ class custom : public avrBitbangLedStrip<
   A, // clock port for SPI protocol (unused if 3-wire LED)
   0,
   GRB, // byte order for each pixel
-  ONE_WIRE_BITBANG> // protocol
+  ONE_PORT_BITBANG> // protocol
 {
   public:
-  custom() : avrBitbangLedStrip<6,2,2,2,50,dataPortId,dataPortBit,A,0,GRB,ONE_WIRE_BITBANG>() {};
+  custom() : avrBitbangLedStrip<6,2,2,2,50,dataPortId,dataPortBit,A,0,GRB,ONE_PORT_BITBANG>() {};
   ~custom() {};
 };
 ////////////////////////////////////////////////////////////////////////////////
 // Declares the LED strip you'll write to. You can change this to the right
 // LED strip model you own.
 
-#define myLEDtype custom
-//#define myLEDtype ws2812b
+// #define myLEDtype custom
+#define myLEDtype ws2812b
 // #define myLEDtype apa102
-myLEDtype<D,1> strip0;
+myLEDtype<D,0> strip0;
 myLEDtype<D,1> strip1;
 myLEDtype<D,2> strip2;
 myLEDtype<D,3> strip3;
 myLEDtype<D,4> strip4;
 myLEDtype<D,5> strip5;
 myLEDtype<D,6> strip6;
-myLEDtype<D,1> strip7;
+myLEDtype<D,7> strip7;
+
+ws2812bs<D,6,D,7> strip_split67;
+ws2812bi<D,6,D,7> strip_intlv67;
 
 ////////////////////////////////////////////////////////////////////////////////
 // We define the pixel array we'll store the actual red, green, blue values in.
 // Note this library supports many pixel structures, and it is best to use the
 // structure that holds the colors in the same order as your LED strip model.
 // If you change the LED type make sure you use the proper byte order here.
-grb  grbPixels[numPixels] = {};
+grb  grbPixels[2*numPixels] = {};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sends an array at the same time to all 8 channels of a given port. Note this
@@ -148,17 +151,53 @@ void parallelPixel(avrLedStripPort dataPortId, const uint16_t arraySize, const u
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// @brief Turns off all LED strips on pins 0 to 7, in constant time.
+////////////////////////////////////////////////////////////////////////////////
+void off(uint16_t npix) {
+  const bool blink = (npix == numPixels);
+
+  if (blink) digitalWrite(13, LOW);
+  else digitalWrite(13, LOW);
+
+  // Turn off up to 1000 LEDs.
+  strip0.clear(npix);
+  strip1.clear(npix);
+  strip2.clear(npix);
+  strip3.clear(npix);
+  strip4.clear(npix);
+  strip5.clear(npix);
+  strip6.clear(npix);
+  strip7.clear(npix);
+  delay(10);
+  if (npix != numPixels) {
+    strip0.grey(2,8);
+    strip1.grey(2,8);
+    strip2.grey(2,8);
+    strip3.grey(2,8);
+    strip4.grey(2,8);
+    strip5.grey(2,8);
+    strip6.grey(2,8);
+    strip7.grey(2,8);
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// @brief This method is automatically called once when the board boots.
 ////////////////////////////////////////////////////////////////////////////////
 void setup()
 {
+  Serial.begin(9600);
+  pinMode(13, OUTPUT);
+
   // Turn off up to 1000 LEDs.
-  strip1.clear(1000);
-  strip2.clear(1000);
-  strip3.clear(1000);
-  strip4.clear(1000);
-  strip5.clear(1000);
-  strip6.clear(1000);
+  off(1000);
+
+  // Create a repeating RGB display
+  for(uint8_t i = 0; i < 2*numPixels; i++) {
+    grbPixels[i].r = maxBrightness * ( i   %3 == 0);
+    grbPixels[i].g = maxBrightness * ((i+2)%3 == 0);
+    grbPixels[i].b = maxBrightness * ((i+1)%3 == 0);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -167,56 +206,70 @@ void setup()
 ////////////////////////////////////////////////////////////////////////////////
 void loop()
 {
-  // Update the LED strips one after the other
-  for(uint8_t i = 0; i < 2*numPixels; i++) {
-    grbPixels[i%numPixels].r = random(maxBrightness);
-    grbPixels[i%numPixels].g = random(maxBrightness);
-    grbPixels[i%numPixels].b = random(maxBrightness);
+  const uint8_t iters = 16;
+  const uint8_t repeats = 4;
 
-    strip0.sendPixels(numPixels, grbPixels);
-    strip1.sendPixels(numPixels, grbPixels);
-    strip2.sendPixels(numPixels, grbPixels);
-    strip3.sendPixels(numPixels, grbPixels);
-    strip4.sendPixels(numPixels, grbPixels);
-    strip5.sendPixels(numPixels, grbPixels);
-    strip6.sendPixels(numPixels, grbPixels);
-    strip7.sendPixels(numPixels, grbPixels);
+  // Default way a user would use.
+  Serial.println("Update LED strips one after the other.");
+  for(uint8_t n = 0; n < iters; n++) {
+    off(numPixels);
+    for(uint8_t i = 0; i < repeats; i++) {
+      strip0.sendPixels(numPixels, grbPixels);
+      strip1.sendPixels(numPixels, grbPixels);
+      strip2.sendPixels(numPixels, grbPixels);
+      strip3.sendPixels(numPixels, grbPixels);
+      strip4.sendPixels(numPixels, grbPixels);
+      strip5.sendPixels(numPixels, grbPixels);
+      strip6.sendPixels(numPixels, grbPixels);
+      strip7.sendPixels(numPixels, grbPixels);
+    }
   }
-  delay(1000);
+  off(1000);
+  delay(250);
 
-  // Turn off up to 1000 LEDs.
-  strip0.clear(1000);
-  strip1.clear(1000);
-  strip2.clear(1000);
-  strip3.clear(1000);
-  strip4.clear(1000);
-  strip5.clear(1000);
-  strip6.clear(1000);
-  strip7.clear(1000);
+  // send first half the pixel array to strip D6, the 2n half to D7,
+  // notice colors will be rgbrgb etc. and strip D7 will pick up the
+  // sequence where strip 6 stopped.
+  // Notice also that one strip will show 1/2 the pixels of the other
+  // examples.
+  Serial.println("Update LED strips 6 & 7 in parallel, split: sending 1/2 the array to each one");
+  for(uint8_t n = 0; n < iters; n++) {
+    off(numPixels);
+    for(uint8_t i = 0; i < repeats; i++) {
+      strip_split67.sendPixels(2*numPixels, grbPixels);
+    }
+  }
+  off(1000);
+  delay(250);
+
+  // send interleaved pixels to strip D7 and D7. pix1 to D6, pix2 to
+  // D7, pix3 to D6, pix4 to D7 etc.
+  // notice colors will skip: D6 array will show rbgrbg... while
+  // D7 will show grbgrb... as pix1 is red, pix2 is green, etc.
+  // Notice also that one strip will show 1/2 the pixels of the other
+  // examples.
+  Serial.println("Update LED strips 6 & 7 in parallel, interleave: sending every other pixel to the other strip.");
+  for(uint8_t n = 0; n < iters; n++) {
+    off(numPixels);
+    for(uint8_t i = 0; i < repeats; i++) {
+      strip_intlv67.sendPixels(2*numPixels, grbPixels);
+    }
+  }
+  off(1000);
   delay(250);
 
   // update LEDs all at the same time, but using low level code
   // to set ports directly. This works as we interlace at bit level.
-  for(uint8_t i = 0; i < 2*numPixels; i++) {
-    grbPixels[i%numPixels].r = random(maxBrightness);
-    grbPixels[i%numPixels].g = random(maxBrightness);
-    grbPixels[i%numPixels].b = random(maxBrightness);
-
-    parallelPixel(D, 3*numPixels, (uint8_t*) grbPixels);
+  Serial.println("Update LED strips at the same time, but copy SAME pattern to all.");
+  for(uint8_t n = 0; n < iters; n++) {
+    off(numPixels);
+    for(uint8_t i = 0; i < repeats; i++) {
+      parallelPixel(D, 3*numPixels, (uint8_t*) grbPixels);
+    }
   }
-  delay(1000);
-
-  // Turn off up to 1000 LEDs.
-  strip0.clear(1000);
-  strip1.clear(1000);
-  strip2.clear(1000);
-  strip3.clear(1000);
-  strip4.clear(1000);
-  strip5.clear(1000);
-  strip6.clear(1000);
-  strip7.clear(1000);
+  off(1000);
   delay(250);
-  
+
   // Update the LED strips at the same time.
   // This will start failing if your CPU is not fast enough when
   // you update too many LED strips at the same time.
@@ -224,38 +277,27 @@ void loop()
   // you can drive in parallel.
   // For ws2812b, it takes too many cycles to update a pixel byte
   // so the LED strip resets. A byte takes 8 * ( 6+2+?) > 64 cycles (4 usec)
-  for(uint8_t i = 0; i < 2*numPixels; i++) {
-    grbPixels[i%numPixels].r = random(maxBrightness);
-    grbPixels[i%numPixels].g = random(maxBrightness);
-    grbPixels[i%numPixels].b = random(maxBrightness);
-
-   const uint8_t * array = (uint8_t*) grbPixels;
-    const uint8_t oldSREG = SREG;
-    __builtin_avr_cli();
-    for(uint16_t j = 0; j < 3*numPixels; j++) {
-//      strip0.sendBytes(1, &array[j]);
-//      strip1.sendBytes(1, &array[j]);
-//      strip2.sendBytes(1, &array[j]);
-//      strip3.sendBytes(1, &array[j]);
-//      strip4.sendBytes(1, &array[j]);
-//      strip5.sendBytes(1, &array[j]);
-      strip6.sendBytes(1, &array[j]);
-//      strip1.sendBytes(7, &array[j]);
+  Serial.println("Update LED strips at the same time, interleaving each pixel sent.");
+  for(uint8_t n = 0; n < iters; n++) {
+    off(numPixels);
+    for(uint8_t i = 0; i < repeats; i++) {
+      const uint8_t * array = (uint8_t*) grbPixels;
+      const uint8_t oldSREG = SREG;
+      __builtin_avr_cli();
+      for(uint16_t j = 0; j < 3*numPixels; j++) {
+        strip0.sendBytes(1, &array[j]);
+        strip1.sendBytes(1, &array[j]);
+        strip2.sendBytes(1, &array[j]);
+        strip3.sendBytes(1, &array[j]);
+        strip4.sendBytes(1, &array[j]);
+        strip5.sendBytes(1, &array[j]);
+        strip6.sendBytes(1, &array[j]);
+        strip7.sendBytes(1, &array[j]);
+      }
+      SREG = oldSREG;
+      // Wait to have display lit for a while
     }
-    SREG = oldSREG;
-
-    // Wait to have display lit for a while
   }
-  delay(1000);
-
-  // Turn off up to 1000 LEDs.
-  strip0.clear(1000);
-  strip1.clear(1000);
-  strip2.clear(1000);
-  strip3.clear(1000);
-  strip4.clear(1000);
-  strip5.clear(1000);
-  strip6.clear(1000);
-  strip7.clear(1000);
-  delay(500);
+  off(1000);
+  delay(750);
 }

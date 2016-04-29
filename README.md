@@ -71,6 +71,10 @@ In terms of usability, and memory footprint I believe FAB_LED is supperior to th
   * Ability to draw patterns repeatedly to support large displays. Just disable interrupts, and call sendPixels() repeatedly.
   * Ability to display separate pixel arrays for new visual effects. Just call sendPixels() repeatedly with different input pixel arrays.
   * Ability to display on the same port using multiple LED formats, to allow mix-n-match of otherwise signal incompatible LEDs, for example to embbed RGB APA106 LEDs with GRB WS2812B or RGWB SK6812 LEDs. This is useful to use LEDs that come with different physical properties and formats, for art projects. Just declare multiple LED strip objects on the same port, and use the one matching your LED strip model at the right pixel offset.
+* FAB_LED can write an array in parallel
+  * To two ports for ws2812b LEDs and alike on 16MHz Arduino and higher, for faster displays. It can do so so splitting the array into blocks (ws2812bs) , or interleaving the pixels of the array (ws2812bi).
+  * To 8 ports for ws2812b LEDs and alike on 16MHz Arduino, if it's the same array sent to all ports
+  * to 8 ports for APA-102 (SPI protocol) - to be implemented-
 
 To demonstrate the benefits of FAB_LED, here are apples-to-apples comparison code snippets to do the same thing with different LED libraires, with compilation results for an Arduino Uno target, compiled on Mac, with Arduino 1.6.7:
 
@@ -364,8 +368,19 @@ error prone, and much less portable across LED strip protocols.
 
 E_FABLED_size
 -------------
-This schema is meant to compare the compiled size of a program using FAB_LED vs using Adafruit's library, vs using FastLED.
+This sketch is meant to compare the compiled size of a program using FAB_LED vs using Adafruit's library, vs using FastLED.
 
+F_manyPorts
+-----------
+This example demonstrates how to update LED strips connected to multiple port pins.
+* by writing to each strip separately
+* by writting to two strips in parallel using ws2812bs (split), each strip getting 1/2 the array
+* by writting to two strips in parallel using ws2812bi (interleave), one strip getting the odd and the other the even pixels.
+* by writting a custom function to send the same pixels to all the ports
+* by writting a custom function to send interleaved each pixels to each strip. On Arduino this does not work until all but one LED strip update is commented out.
+The LEDs are lit by a RGB checkerboard. The test is designed to shimmer the pixels at a frequency that indicates how fast the LEDs are being refreshed to see how fast is each method.
+
+Since not all port are updated by ws2812bs/ws2812bi, in between sequences 2 white pixels are drawn.
 
 Demos
 =====
@@ -421,10 +436,30 @@ We could have used a grb pixel which uses less RAM, but then there would be no w
 in the sk6812 pixels.
 
 ```
+// Define two LED communication protocols on the same port, D6.
+ws2812b<D,6> myWs2812b; // grb  protocol
+sk6812<D,6>  mySk6812;  // rgbw protocol
+
+#define NUM_WS2812B_PIXELS 16
+#define NUM_SK6812_PIXELS  32
+#define NUM_PIXELS (NUM_SK6812_PIXELS + NUM_WS2812B_PIXELS)
+
+// This is a custom drawing routine for the specific configuration
+void draw(grbw pixels) {
+  // Don't forget to turn off interrupts if calling functions back-to-back
   __builtin_avr_cli();
-  myWs2812.sendPixels(pixCut, &grbwPixels[0]);
-  mySk6812b.sendPixels(NUM_PIXELS - pixCut, &grbwPixels[pixCut]);
+  myWs2812b.sendPixels(NUM_WS2812B_PIXELS, &pixels[0]);
+  mySk6812b.sendPixels(NUM_SK6812_PIXELS,  &pixels[NUM_WS2812B_PIXELS]);
   SREG = oldSREG;
+}
+
+grbw myPixels[NUM_PIXELS] = {};
+
+void loop() {
+  update(myPixels);
+  draw(myPixels);
+  delay(1000);
+}
 ```
 
 Details
@@ -457,6 +492,7 @@ Pixel formats
     pixel array back and forth to an untyped pixel array (uint8_t * or uint32_t *)
     to do manipulations. The untyped pixel arrays will be a bit more efficient to
     display with `sendPixels()`.
+* Support 1 or 2 ports. Two ports allow to update two LED strips in parrallel, for faster writes, either into 2 stripes or interleaved pixels.
 
 Bio
 ===
@@ -510,6 +546,8 @@ Arduino Uno       | Pass    | Sonyhome
 AtTiny85 16MHz    | Pass    | Sonyhome
                   |         |
 `LEDs`            |         |
+ws2812bs          | Pass    | Sonyhome
+ws2812bi          | Pass    | Sonyhome
 ws2812b           | Pass    | Sonyhome
 Apa-104           | Pass    | Sonyhome
 Apa-106           | Pass    | Sonyhome
