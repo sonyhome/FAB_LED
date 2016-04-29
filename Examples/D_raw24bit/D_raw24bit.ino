@@ -32,7 +32,7 @@
 /// @brief This parameter says how many LEDs are in your strip.
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs.
-const uint16_t numPixels = 14;
+const uint16_t numPixels = 16;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief this definition allows you to select which digital port the LED strip
@@ -45,18 +45,9 @@ const uint16_t numPixels = 14;
 //apa106<D,6> myLeds;
 ws2812b<D,6> myLeds;
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Declare a pixel as 3 bytes, each holding a color of [0..255].
-/// Match the typedef to your LED strip model.
-/// This type is for convenience when setting up the LED strip. The array used
-/// and sent to the LED strips is still a uint8_t *, where three bytes represent
-/// one pixel.
-//typedef grb pixel_t;
-//typedef grb pixel_t;
-//typedef rgb pixel_t;
-typedef grb pixel_t;
-
-
+#define   RED(x, i) x[i]
+#define GREEN(x, i) x[i+1]
+#define  BLUE(x, i) x[i+2]
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Waits then clears the LED strip.
@@ -81,15 +72,11 @@ void colorN(uint8_t red, uint8_t green, uint8_t blue)
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3*numPixels] = {};
 
-	// We cast "array" to "pix" so we can write the colors using
-	// the pixel_t structure. It's easier to read.
-	pixel_t * pix = (pixel_t *) array;
-
 	// Set each set of 3 bytes for every pixel
 	for (uint16_t i = 0; i < numPixels; i++) {
-		pix[i].r = red;
-		pix[i].g = green;
-		pix[i].b = blue;
+		  RED(array, i) = red;
+		GREEN(array, i) = green;
+		 BLUE(array, i) = blue;
 	}
 
 	// Display the LEDs
@@ -108,13 +95,9 @@ void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 	uint8_t array[3*dim];
 	memset(array,0,sizeof(array));
 
-	// We cast "array" to "pix" so we can write the colors using
-	// the pixel_t structure. It's easier to read.
-	pixel_t * pix = (pixel_t *) array;
-
-	pix[pos].r = red;
-	pix[pos].g = green;
-	pix[pos].b = blue;
+	  RED(array, pos) = red;
+	GREEN(array, pos) = green;
+	 BLUE(array, pos) = blue;
 
 	// Display the LEDs
 	myLeds.sendPixels(dim, array);
@@ -131,15 +114,11 @@ void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 void color1N(uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3] = {};
+	uint8_t array[3];
 
-	// We cast "array" to "pix" so we can write the colors using
-	// the pixel_t structure. It's easier to read.
-	pixel_t * pix = (pixel_t *) array;
-
-	pix[0].r = red;
-	pix[0].g = green;
-	pix[0].b = blue;
+	  RED(array, 0) = red;
+	GREEN(array, 0) = green;
+	 BLUE(array, 0) = blue;
 
 	// Disable interupts, save the old interupt state
 	const uint8_t oldSREG = SREG;
@@ -184,19 +163,18 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t array[3*numPixels] = {};
-	pixel_t * pix = (pixel_t *) array;
 
 	// Initialize the colors on the array
-	pix[0].r = brightness;
-	pix[0].g = 0;
-	pix[0].b = 0;
+	  RED(array, 0) = brightness;
+	GREEN(array, 0) = 0;
+	 BLUE(array, 0) = 0;
 	for (uint16_t i = 1; i < numPixels; i++) {
 		// Set pix to previous pix color
-		pix[i].r = pix[i-1].r;
-		pix[i].g = pix[i-1].g;
-		pix[i].b = pix[i-1].b;
-		// Then change the color
-		colorWheel(incLevel, pix[i].r, pix[i].g, pix[i].b);
+		  RED(array, i) = RED(array, i-1);
+		GREEN(array, i) = GREEN(array, i-1);
+		 BLUE(array, i) = BLUE(array, i-1);
+		// Then rotate it to its final color.
+		colorWheel(incLevel, RED(array, i), GREEN(array, i), BLUE(array, i));
 	}
 
 	// Display the LEDs
@@ -206,7 +184,7 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 
 		// Rotate the colors based on the pixel's previous color.
 		for (uint16_t i = 0; i < numPixels ; i++) {
-			colorWheel(incLevel, pix[i].r, pix[i].g, pix[i].b);
+			colorWheel(incLevel, RED(array, i), GREEN(array, i), BLUE(array, i));
 		}
 	}
 }
@@ -222,13 +200,12 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 void rainbow1N(uint8_t brightness, uint8_t incLevel)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3] = {};
-	pixel_t * pix = (pixel_t *) array;
+	uint8_t array[3];
 
 	// Initialize the colors on the array
-	pix[0].r = brightness;
-	pix[0].g = 0;
-	pix[0].b = 0;
+	  RED(array, 0) = brightness;
+	GREEN(array, 0) = 0;
+	 BLUE(array, 0) = 0;
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
@@ -241,7 +218,7 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 		delay(100);
 
 		// Rotate the colors based on the pixel's previous color.
-		colorWheel(incLevel, pix[0].r, pix[0].g, pix[0].b);
+		colorWheel(incLevel, RED(array, 0), GREEN(array, 0), BLUE(array, 0));
 	}
 }
 
@@ -255,39 +232,41 @@ void jitter()
 {
 	// Allocate array with half the pixels because we past it twice.
 	// Add maxJitter+1 pixels because we change the offset we start displaying.
-	const uint8_t maxJitter = 2;
+	const uint8_t maxJitter = 5;
 	const uint8_t arrayDim = numPixels/2 + maxJitter+1;
 
 	// A pixel is 3 bytes
 	uint8_t array[3*arrayDim] = {};
-	pixel_t * pix = (pixel_t *) array;
 
 	// Set each set of 3 bytes for every pixel
 	for (uint16_t i = 0; i < arrayDim; i++) {
 		if (i % 2 == 0) {
-			pix[i].r = 8;
+			  RED(array, 0) = 8;
 		}
 		if (i % 3 == 0) {
-			pix[i].g = 8;
+			GREEN(array, 0) = 8;
 		}
 		if (i % 5 == 0) {
-			pix[i].b = 8;
+			 BLUE(array, 0) = 8;
 		}
 	}
 	// Mark one bright red pixel marker to show how LEDs are displayed
-	pix[maxJitter].g = 0;
-	pix[maxJitter].b = 0;
-	pix[maxJitter].r = 64;
+	  RED(array, 0) = 64;
+	GREEN(array, 0) = 0;
+	 BLUE(array, 0) = 0;
+	// From here on, we do not change the pixels colors, we just move the pointers to animate the LED strip.
 
 	// Repeat 10 times
-	for (uint8_t t = 0; t < 10; t++) {
+	for (uint8_t repeat = 0; repeat < 10; repeat++) {
 		// Scroll display
-		for (uint8_t i = 0; i <= maxJitter; i++) {
-			const uint8_t * displayPt = &array[3*i];
+		for (uint8_t position = 0; position <= maxJitter; position++) {
+			// We multiply by 3 because a pixel is 3 bytes.
+			const uint8_t * displayPt = &array[3 * position];
 
 			const uint8_t oldSREG = SREG;
 			__builtin_avr_cli();
-			// Display same pattern twice, separated by a fixed pixel.
+			// Display same pattern twice, separated by a fixed pixel in the middle.
+			// This just demonstrates how to do more complex animations.
 			myLeds.sendPixels(numPixels/2, displayPt);
 			myLeds.sendPixels(1, &array[3*maxJitter]);
 			myLeds.sendPixels(numPixels/2-1, displayPt);

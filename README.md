@@ -71,10 +71,16 @@ In terms of usability, and memory footprint I believe FAB_LED is supperior to th
   * Ability to draw patterns repeatedly to support large displays. Just disable interrupts, and call sendPixels() repeatedly.
   * Ability to display separate pixel arrays for new visual effects. Just call sendPixels() repeatedly with different input pixel arrays.
   * Ability to display on the same port using multiple LED formats, to allow mix-n-match of otherwise signal incompatible LEDs, for example to embbed RGB APA106 LEDs with GRB WS2812B or RGWB SK6812 LEDs. This is useful to use LEDs that come with different physical properties and formats, for art projects. Just declare multiple LED strip objects on the same port, and use the one matching your LED strip model at the right pixel offset.
+* FAB_LED can write an array in parallel
+  * To two ports for ws2812b LEDs and alike on 16MHz Arduino and higher, for faster displays. It can do so so splitting the array into blocks (ws2812bs) , or interleaving the pixels of the array (ws2812bi).
+  * To 8 ports for ws2812b LEDs and alike on 16MHz Arduino, if it's the same array sent to all ports
+  * to 8 ports for APA-102 (SPI protocol) - to be implemented-
 
 To demonstrate the benefits of FAB_LED, here are apples-to-apples comparison code snippets to do the same thing with different LED libraires, with compilation results for an Arduino Uno target, compiled on Mac, with Arduino 1.6.7:
 
 ### Adafruit NeoPixel library
+
+NeoPixel librar requires 2.8kB of Flash memory.
 
 ```
 #include <Adafruit_NeoPixel.h>
@@ -96,7 +102,56 @@ void loop() {
 `Sketch uses 2,846 bytes (8%) of program storage space. Maximum is 32,256 bytes.
 Global variables use 40 bytes (1%) of dynamic memory, leaving 2,008 bytes for local variables. Maximum is 2,048 bytes.`
 
+### Adafruit DotStar library
+
+DotStar requires a minimum of 2.8kB or Flash memory.
+
+```
+#include <Adafruit_DotStar.h>
+#include <SPI.h> 
+
+Adafruit_DotStar strip = Adafruit_DotStar(8, 4, 5, DOTSTAR_BRG);
+
+void setup() {
+  strip.begin();
+}
+
+void loop() {
+  strip.setPixelColor(7, 16); 
+  strip.show();
+  delay(1000);
+}
+```
+
+`Sketch uses 2,826 bytes (8%) of program storage space. Maximum is 32,256 bytes.
+Global variables use 37 bytes (1%) of dynamic memory, leaving 2,011 bytes for local variables. Maximum is 2,048 bytes.`
+
+### FastLED
+
+FastLED 3.x uses 3.8kB of Flash memory and 105 bytes of RAM!
+
+```
+#include <FastLED.h>
+CRGB leds[8] = {};
+
+void setup() { 
+  	  FastLED.addLeds<NEOPIXEL, 3>(leds, 8);
+}
+
+void loop() { 
+  leds[7] = CRGB::Red;
+  FastLED.show();
+  delay(1000);
+}
+```
+
+` #warning FastLED version 3.001.001  (Not really a warning, just telling you here.)
+Sketch uses 3,864 bytes (11%) of program storage space. Maximum is 32,256 bytes.
+Global variables use 105 bytes (5%) of dynamic memory, leaving 1,943 bytes for local variables. Maximum is 2,048 bytes.`
+
 ### FAB_LED library
+
+FAB_LED requires only 736B of Flash memory.
 
 ```
 #include <FAB_LED.h>
@@ -132,6 +187,201 @@ Here you will find photos of how the example code shipped with the FAB_LED libra
 videos to verify the output on your LEDs is as expected. If it is not exactly as expected, you may be using
 the wrong LED model definition.
 
+AA_SimpleDemo
+_____________
+This example shows how simple it is to address the LEDs with this library. With about 10 lines of code, we have a cool effect, and
+the complex part is it calls random() to pick a pixel to update, and random() again for each color, to pick a random color.
+There are actually only 4 lines that are related to using the LED library.
+
+<iframe width="560" height="315" src="https://www.youtube.com/embed/XfvVzaV4vOs" frameborder="0" allowfullscreen></iframe>
+
+<a href="https://www.youtube.com/embed/XfvVzaV4vOs"
+target="_blank"><img src="https://i.ytimg.com/vi/XfvVzaV4vOs/default.jpg"
+width="240" height="180" border="10" align="right" /></a>
+
+```
+#include <FAB_LED.h>
+
+// FAB_LED provides many types of LEDs, here we use a WS2812B LED protocol on port D6
+ws2812b<D,6> myLedStrip;
+
+// grb is provided by FAB_LED for convenience. WS2812B natively uses GRB LEDs.
+// other LED types include rgb, grbw, rgbw, bgr... You can also use uint8_t or uint32_t.
+grb pixels[8] = {};
+
+void setup() {
+  myLedStrip.clear(1000);
+}
+
+void loop() {
+  uint16_t pos = random(8);
+  pixels[pos].r = random(16);
+  pixels[pos].g = random(16);
+  pixels[pos].b = random(16);
+
+  // You fully manage your array (unlike other LED libraries which embed it
+  // into their class), and just send it when you're ready to show it.
+  myLedStrip.sendPixels(8, pixels);
+
+  delay(100);
+}
+```
+
+A_testPixelStruct
+-----------------
+This example demonstrates the use of the LED structures that allow you to access directly the red, green and blue components of each pixel.
+The structures abstract the pixels, so even though we offer multiple formats (rgb, grb, rgbw, etc.) they actually all will work with your
+LED strip, no matter what is the natural order of the colors for your LED model.
+
+It is however more efficient to use the natural order (it is faster).
+You can use this example to detect the model of your LED strip, as the default display is red, green, blue, white.
+
+The setup() routine sets up the different pixel type arrays with a specific color for each.
+They are shown in order so that red shows first, then green, etc.
+
+The code excerpt below is simpler than the actual code. The code actually has one routine per LED model,
+and the main loop calls one of them, with all the others commented out.
+
+<a href="https://www.youtube.com/watch?v=fI9f-9K0C0M"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/fI9f-9K0C0M/mqdefault.webp"
+width="240" height="180" border="10" align="right" /></a>
+
+```
+#include <FAB_LED.h>
+ws2812b<D,6> myWs2812;
+
+ws2812b<D,6> myWs2812;
+
+#define NUM_PIXELS 40
+
+rgbw rgbwPixels[NUM_PIXELS] = {};
+grbw grbwPixels[NUM_PIXELS] = {};
+rgb  rgbPixels[NUM_PIXELS] = {};
+grb  grbPixels[NUM_PIXELS] = {};
+
+
+void setup() {
+  for (int i=0; i < 40; i++) {
+  // Initialize rgb array to show as red strip
+  rgbPixels[i].r = 16;
+
+  // Initialise grb array to show as green
+  grbPixels[i].g = 16;
+
+  // Initialize grbw array to show as blue
+  rgbwPixels[i].b = 16;
+
+  // Initialize rgbw array to show as white
+  grbwPixels[i].r = 16;
+  grbwPixels[i].g = 16;
+  grbwPixels[i].b = 16;
+  }
+}
+
+loop() {
+  mySk6812.clear(1000);
+  delay(500);
+
+  showWs2812b();
+}
+
+void showWs2812b(void) {
+  // Show rgb array (red)
+  myWs2812.sendPixels(40, rgbPixels);
+  // Wait to have display lit for a while
+  delay(1000);
+
+  // Show grb array (green)
+  myWs2812.sendPixels(40, grbPixels);
+  delay(1000);
+
+  // Show rgbw array (blue)
+  myWs2812.sendPixels(40, rgbwPixels);
+  delay(1000);
+
+  // Show grbw array (white)
+  myWs2812.sendPixels(40 ,grbwPixels);
+  delay(1000);
+}
+```
+
+B_DebugConsole
+--------------
+This example prints informations on the serial console using the `Serial` class.
+On startup, it displays the properties of the LED protocol used by the program.
+
+It then loops doing multiple display demos, and for each prints out the memory used by the pixel array needed for that mode.
+
+<a href="https://www.youtube.com/watch?v=uJeqUJm0ouU"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/uJeqUJm0ouU/mqdefault.webp"
+width="240" height="180" border="10"/></a>
+
+C_testInfinitePixels
+--------------------
+
+This example shows some simple LED animations that use up almost no RAM, that can be applied to an almost infinite number of pixels.
+By default the test is configured to drive 1000 pixels, and in practice the LED library as is is limited to 64K pixels per port.
+For example, the rainbow effect provided stores only one pixel in RAM to drive all 1000 pixels of the strip (excerpt of the code below as proof).
+
+<a href="https://www.youtube.com/watch?v=NiCUeifl74Y"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/NiCUeifl74Y/mqdefault.webp"
+width="240" height="180" border="10" align="right" /></a>
+
+```
+void rainbow1N(uint8_t brightness) {
+ rgb pix[1];
+
+ pix[0].r = brightness;
+ pix[0].g = 0;
+ pix[0].b = 0;
+
+ for (uint16_t iter = 0; iter < 20 ; iter++) {
+
+  const uint8_t oldSREG = SREG;
+  __builtin_avr_cli();
+
+  // This loop draws all the pixels of the LED strip
+  for (uint16_t i = 0; i < numPixels ; i++) {
+   myLeds.sendPixels(1, pix);
+
+   // Change the colors based on the pixel's previous color
+   // by walking each color of the rainbow
+   colorWheel(1, pix[0].r, pix[0].g, pix[0].b);
+  }
+
+  SREG = oldSREG;
+
+  // Wait, and refresh the LED strip
+  delay(100);
+ }
+}
+```
+
+D_raw24bit
+----------
+This is an earlier example that shows how to use the library with basic uint8_t arrays,
+instead of using the predefined pixel types like grb, etc.
+
+In this case the programmer has to know and handle exactly the position of each pixel colors
+and do the math for each pixel offset in the array. It's not very complex but a bit more
+error prone, and much less portable across LED strip protocols.
+
+E_FABLED_size
+-------------
+This sketch is meant to compare the compiled size of a program using FAB_LED vs using Adafruit's library, vs using FastLED.
+
+F_manyPorts
+-----------
+This example demonstrates how to update LED strips connected to multiple port pins.
+* by writing to each strip separately
+* by writting to two strips in parallel using ws2812bs (split), each strip getting 1/2 the array
+* by writting to two strips in parallel using ws2812bi (interleave), one strip getting the odd and the other the even pixels.
+* by writting a custom function to send the same pixels to all the ports
+* by writting a custom function to send interleaved each pixels to each strip. On Arduino this does not work until all but one LED strip update is commented out.
+The LEDs are lit by a RGB checkerboard. The test is designed to shimmer the pixels at a frequency that indicates how fast the LEDs are being refreshed to see how fast is each method.
+
+Since not all port are updated by ws2812bs/ws2812bi, in between sequences 2 white pixels are drawn.
+
 Demos
 =====
 
@@ -157,6 +407,60 @@ I plan to support more complex mappings.
 ![2D LED display with diffuser in front](Documentation/Readme/Demo/2D.jpg)  
 ![2D LED board connected on Arduino Uno](Documentation/Readme/Demo/2Dboard.jpg)  
 
+Sk6812
+------
+
+Loial's first attempt at using the FAB_LED library, using sk6812 rgb LEDs.
+
+<a href="https://youtu.be/BiE-9_EtXDg"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/BiE-9_EtXDg/mqdefault.webp"
+width="240" height="180" border="10" /></a>
+
+
+Soldering ws2812b + sk6812-rgbw
+-------------------------------
+Lukas decided to solder back to back LED strips using different color protocols.
+This demo shows that FAB_LED allowed him to send the right pixel formats to each strip,
+from the same pixel array in memory. This allows him to focus drawing the right pattern
+in the array and letting the library handle the display.
+
+<a href="https://www.youtube.com/embed/hlfaLeGNjjM"
+target="_blank"><img src="https://i.ytimg.com/vi_webp/hlfaLeGNjjM/mqdefault.webp"
+width="240" height="180" border="10" align="right" /></a>
+
+Below is the display routine that handles the mixed LEDs with different protocols.
+`pixCut` is the offset where the LED strips were spliced together.
+
+We use grbw (4 byte) pixels so he can set the white channel, which is ignored by ws2812b, but not the sk6812 leds.
+We could have used a grb pixel which uses less RAM, but then there would be no way to control the white color
+in the sk6812 pixels.
+
+```
+// Define two LED communication protocols on the same port, D6.
+ws2812b<D,6> myWs2812b; // grb  protocol
+sk6812<D,6>  mySk6812;  // rgbw protocol
+
+#define NUM_WS2812B_PIXELS 16
+#define NUM_SK6812_PIXELS  32
+#define NUM_PIXELS (NUM_SK6812_PIXELS + NUM_WS2812B_PIXELS)
+
+// This is a custom drawing routine for the specific configuration
+void draw(grbw pixels) {
+  // Don't forget to turn off interrupts if calling functions back-to-back
+  __builtin_avr_cli();
+  myWs2812b.sendPixels(NUM_WS2812B_PIXELS, &pixels[0]);
+  mySk6812b.sendPixels(NUM_SK6812_PIXELS,  &pixels[NUM_WS2812B_PIXELS]);
+  SREG = oldSREG;
+}
+
+grbw myPixels[NUM_PIXELS] = {};
+
+void loop() {
+  update(myPixels);
+  draw(myPixels);
+  delay(1000);
+}
+```
 
 Details
 =======
@@ -188,6 +492,7 @@ Pixel formats
     pixel array back and forth to an untyped pixel array (uint8_t * or uint32_t *)
     to do manipulations. The untyped pixel arrays will be a bit more efficient to
     display with `sendPixels()`.
+* Support 1 or 2 ports. Two ports allow to update two LED strips in parrallel, for faster writes, either into 2 stripes or interleaved pixels.
 
 Bio
 ===
@@ -237,20 +542,23 @@ This table shows the hardware FAB_LED has been tried on successfully.
 Hardware          | Test    | Tester
 ---               |:---:    |-----:
 `Controllers`     |         |
-Arduino Uno       | Pass    | sonyhome
-AtTiny85 16MHz    | Pass    | sonyhome
+Arduino Uno       | Pass    | Sonyhome
+AtTiny85 16MHz    | Pass    | Sonyhome
                   |         |
 `LEDs`            |         |
-ws2812b           | Pass    | sonyhome
-Apa-104           | Pass    | sonyhome
-Apa-106           | Pass    | sonyhome
-sk6812            | Maybe   | trash (tested as 3 byte, not 4 byte)
-mix ws2812b+Apa106| Pass    | sonyhome
+ws2812bs          | Pass    | Sonyhome
+ws2812bi          | Pass    | Sonyhome
+ws2812b           | Pass    | Sonyhome
+Apa-104           | Pass    | Sonyhome
+Apa-106           | Pass    | Sonyhome
+sk6812b rgb       | Pass    | Loial
+sk6812b grbw      | Pass    | Lukony
+mix ws2812b+Apa106| Pass    | Sonyhome
+mix ws2812b+sk6812| Pass    | Lukony
 
 Pending
 
-wolfwings - teensy 3.2 120 & 144mhz  
-lukony - ws2812b + sk6812  
+mblade, wolfwings - ARM0 teensy 3.2 120 & 144mhz  
 trash - sk6812 (rgbw)  
 
 Releases
