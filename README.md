@@ -248,7 +248,6 @@ width="240" height="180" border="10" align="right" /></a>
 
 ```
 #include <FAB_LED.h>
-ws2812b<D,6> myWs2812;
 
 ws2812b<D,6> myWs2812;
 
@@ -256,21 +255,18 @@ ws2812b<D,6> myWs2812;
 
 rgbw rgbwPixels[NUM_PIXELS] = {};
 grbw grbwPixels[NUM_PIXELS] = {};
-rgb  rgbPixels[NUM_PIXELS] = {};
-grb  grbPixels[NUM_PIXELS] = {};
+rgb   rgbPixels[NUM_PIXELS] = {};
+grb   grbPixels[NUM_PIXELS] = {};
 
 
 void setup() {
   for (int i=0; i < 40; i++) {
   // Initialize rgb array to show as red strip
   rgbPixels[i].r = 16;
-
   // Initialise grb array to show as green
   grbPixels[i].g = 16;
-
   // Initialize grbw array to show as blue
   rgbwPixels[i].b = 16;
-
   // Initialize rgbw array to show as white
   grbwPixels[i].r = 16;
   grbwPixels[i].g = 16;
@@ -279,7 +275,7 @@ void setup() {
 }
 
 loop() {
-  mySk6812.clear(1000);
+  myWs2812b.clear(1000);
   delay(500);
 
   showWs2812b();
@@ -290,15 +286,12 @@ void showWs2812b(void) {
   myWs2812.sendPixels(40, rgbPixels);
   // Wait to have display lit for a while
   delay(1000);
-
   // Show grb array (green)
   myWs2812.sendPixels(40, grbPixels);
   delay(1000);
-
   // Show rgbw array (blue)
   myWs2812.sendPixels(40, rgbwPixels);
   delay(1000);
-
   // Show grbw array (white)
   myWs2812.sendPixels(40 ,grbwPixels);
   delay(1000);
@@ -314,7 +307,50 @@ It then loops doing multiple display demos, and for each prints out the memory u
 
 <a href="https://www.youtube.com/watch?v=uJeqUJm0ouU"
 target="_blank"><img src="https://i.ytimg.com/vi_webp/uJeqUJm0ouU/mqdefault.webp"
-width="240" height="180" border="10"/></a>
+width="240" height="180" border="10" align="right" /></a>
+
+```
+
+class avrBitbangLedStrip<...>
+16MHz CPU, 62500 picoseconds per cycle
+ONE  HIGH=8 LOW=2 cycles
+ZERO HIGH=2 LOW=4 cycles
+GRB REFRESH MSEC=20
+DATA_PORT D.6, ONE-PORT (bitbang)
+
+colorN(8,0,0)
+Pixels array size=24
+
+colorN(0,8,0)
+Pixels array size=24
+
+colorN(0,0,8)
+Pixels array size=24
+
+color1(0, 0,0,255)
+Pixels array size=3
+
+color1(1, 0,255,0)
+Pixels array size=6
+
+color1(2, 255,0,0)
+Pixels array size=9
+
+color1N(4,4,0)
+Pixels array size=3
+
+rainbow(16)
+Pixels array size=24
+
+rainbow(16)
+Pixels array size=24
+
+rainbow1N(16)
+Pixels array size=3
+
+jitter()
+array size=21
+```
 
 C_testInfinitePixels
 --------------------
@@ -366,9 +402,36 @@ In this case the programmer has to know and handle exactly the position of each 
 and do the math for each pixel offset in the array. It's not very complex but a bit more
 error prone, and much less portable across LED strip protocols.
 
+```
+#include <FAB_LED.h>
+const uint16_t numPixels = 16;
+ws2812b<D,6> myLeds;
+
+#define   RED(x, i) x[i]
+#define GREEN(x, i) x[i+1]
+#define  BLUE(x, i) x[i+2]
+
+void colorN(uint8_t red, uint8_t green, uint8_t blue)
+{
+	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
+	uint8_t array[3*numPixels] = {};
+
+	// Set each set of 3 bytes for every pixel
+	for (uint16_t i = 0; i < numPixels; i++) {
+		  RED(array, i) = red;
+		GREEN(array, i) = green;
+		 BLUE(array, i) = blue;
+	}
+
+	myLeds.sendPixels(numPixels, array);
+}
+
+```
+
 E_FABLED_size
 -------------
 This sketch is meant to compare the compiled size of a program using FAB_LED vs using Adafruit's library, vs using FastLED.
+All this program does is make a simple pixel array and display it. It's ery boring.
 
 F_manyPorts
 -----------
@@ -381,6 +444,33 @@ This example demonstrates how to update LED strips connected to multiple port pi
 The LEDs are lit by a RGB checkerboard. The test is designed to shimmer the pixels at a frequency that indicates how fast the LEDs are being refreshed to see how fast is each method.
 
 Since not all port are updated by ws2812bs/ws2812bi, in between sequences 2 white pixels are drawn.
+
+```
+#include <FAB_LED.h>
+const uint16_t numPixels = 4*8;
+const uint16_t maxBrightness = 16;
+
+// Write to ports D6 and D7.
+ws2812bs<D,6,D,7> strip_split67;
+
+// Displays numPixel on each LED strip
+grb  grbPixels[2*numPixels] = {};
+
+void setup(void)
+{
+  for(uint8_t i = 0; i < 2*numPixels; i++) {
+    grbPixels[i].r = maxBrightness * ( i   %3 == 0);
+    grbPixels[i].g = maxBrightness * ((i+2)%3 == 0);
+    grbPixels[i].b = maxBrightness * ((i+1)%3 == 0);
+  }
+}
+
+void loop(void)
+{
+  strip_split67.sendPixels(2*numPixels, grbPixels);
+  delay(250);
+}
+```
 
 Demos
 =====
@@ -445,7 +535,7 @@ sk6812<D,6>  mySk6812;  // rgbw protocol
 #define NUM_PIXELS (NUM_SK6812_PIXELS + NUM_WS2812B_PIXELS)
 
 // This is a custom drawing routine for the specific configuration
-void draw(grbw pixels) {
+void customSendPiels(grbw pixels) {
   // Don't forget to turn off interrupts if calling functions back-to-back
   __builtin_avr_cli();
   myWs2812b.sendPixels(NUM_WS2812B_PIXELS, &pixels[0]);
@@ -457,7 +547,7 @@ grbw myPixels[NUM_PIXELS] = {};
 
 void loop() {
   update(myPixels);
-  draw(myPixels);
+  customSendPiels(myPixels);
   delay(1000);
 }
 ```

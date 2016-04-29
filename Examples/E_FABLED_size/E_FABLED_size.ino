@@ -21,8 +21,8 @@
 
 void setup()
 {
-	// Configure Serial for printing.
-	Serial.begin(9600);
+  // Configure Serial for printing.
+  Serial.begin(9600);
 }
 
 
@@ -31,14 +31,14 @@ void setup()
 ////////////////////////////////////////////////////////////////////////////////
 void loop()
 {
-	uint8_t pix[3*8] = {};
-	pix[7] = 16;
-	Serial.print("pix[7]=");
-	Serial.print(pix[7]);
-	Serial.print("\n");
+  uint8_t pix[3*8] = {};
+  pix[7] = 16;
+  Serial.print("pix[7]=");
+  Serial.print(pix[7]);
+  Serial.print("\n");
 
-////	myLeds.clear(1000);
-	delay(1000);
-////	myLeds.sendPixels(8, pix);
-	delay(1000);
+  myLeds.clear(1000);
+  delay(1000);
+  myLeds.sendPixels(8, pix);
+  delay(1000);
 }
