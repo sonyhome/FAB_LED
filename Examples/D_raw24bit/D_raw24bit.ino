@@ -56,10 +56,10 @@ void holdAndClear(uint16_t on_time, uint16_t off_time)
 {
 	// Wait 1sec, turn off LEDs, wait 200msec
 	delay(on_time);
-	PORTB ^= 1U << 5; // On
+	//PORTB ^= 1U << 5; // On
 	myLeds.clear(numPixels);
 	delay(off_time);
-	PORTB ^= 1U << 5; // Off
+	//PORTB ^= 1U << 5; // Off
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -122,7 +122,7 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 
 	// Disable interupts, save the old interupt state
 	const uint8_t oldSREG = SREG;
-	__builtin_avr_cli();
+	cli();
 
 	// Display the LEDs
 	for (uint16_t i = 0; i < numPixels; i++) {
@@ -210,7 +210,7 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
 		const uint8_t oldSREG = SREG;
-		__builtin_avr_cli();
+		cli();
 		for (uint16_t i = 0; i < numPixels ; i++) {
 			myLeds.sendPixels(1, array);
 		}
@@ -264,7 +264,7 @@ void jitter()
 			const uint8_t * displayPt = &array[3 * position];
 
 			const uint8_t oldSREG = SREG;
-			__builtin_avr_cli();
+			cli();
 			// Display same pattern twice, separated by a fixed pixel in the middle.
 			// This just demonstrates how to do more complex animations.
 			myLeds.sendPixels(numPixels/2, displayPt);
@@ -292,8 +292,8 @@ void setup()
 	// Configure a strobe signal to Port B5 for people who
 	// use oscilloscopes to look at the signal sent to the LEDs
 	// Note that B5 correspons to the pin13 LED on Arduino Uno.
-	DDRB |= 1U << 5;
-	PORTB &= ~(1U << 5);
+	//DDRB |= 1U << 5;
+	//PORTB &= ~(1U << 5);
 }
 
 

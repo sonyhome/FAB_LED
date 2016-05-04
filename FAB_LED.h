@@ -163,7 +163,7 @@ enum ledProtocol {
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief undefined port hacks
+/// @brief Hack to survive undefined port on Arduino
 /// avoid compilation errors for arduinos that are missing some of the 4 ports
 /// by defining all the unknown ports to be any of the known ones. This quiets
 /// the compiler, and that fluff code optimizes away.
@@ -221,37 +221,47 @@ enum ledProtocol {
 /// @brief Arduino AVR low level macros
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Port control register address I/O manipulation
+/// Port Data Direction control Register address
 #define AVR_DDR(id) _AVR_DDR((id))
 #define _AVR_DDR(id) ((id==A) ? DDRA : (id==B) ? DDRB : (id==C) ? DDRC : \
 		(id==D) ? DDRD : (id==E) ? DDRE : DDRF)
 #define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
 #define FAB_DDR( portId) AVR_DDR(portId)
 
-/// Port address pin level manipulation
+/// Port address & pin level manipulation
 #define AVR_PORT(id) _AVR_PORT((id))
 #define _AVR_PORT(id) ((id==A) ? PORTA : (id==B) ? PORTB : (id==C) ? PORTC : \
 		(id==D) ? PORTD : (id==E) ? PORTE : PORTF)
 #define FAB_PORT(portId) AVR_PORT(portId)
+// Note: gcc converts these bit manipulations to sbi and cbi instructions
 #define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
 #define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin);
 
-/// Method to optimally delay N cycles for bitBang.
+/// Method to optimally delay N cycles with nops for bitBang.
 #define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count);
 
-#define DISABLE_INTERRUPTS __builtin_avr_cli()
+// Number of cycles sbi and cbi instructions take when using SET macros
+const int sbiCycles = 2;
+const int cbiCycles = 2;
+
+#define DISABLE_INTERRUPTS {uint8_t oldSREG = SREG; __builtin_avr_cli()
+#define RESTORE_INTERRUPTS SREG = oldSREG; }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 #elif defined(__arm__)
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief ARM0 - ARM3 low level macros
+/// @note: Ports have no letter, just port pins. ws2812b<D,6> will ignore D and
+/// just route to pin 6.
+///
+/// Register information:
+/// http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.ddi0337h/BABJFFGJ.html
+/// DWT_CYCCNT: Cycle count register
 ////////////////////////////////////////////////////////////////////////////////
 
-#error "ARM0 and ARM3 are not yet supported"
-
-//#define DELAY_CYCLES(count) if (count > 0) SysTick_Wait(count)
-#define DELAY_CYCLES(count) if (count > 0) delay(count)
+/// @todo THE debug() function template resolution does not work on non optimized teensy
+//#define DISABLE_DEBUG_METHOD
 
 #define SET_DDR_HIGH( portId, portPin)
 #define FAB_DDR( portId) AVR_DDR(portId)
@@ -259,7 +269,16 @@ enum ledProtocol {
 
 #define SET_PORT_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
 #define SET_PORT_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
-#define DISABLE_INTERRUPTS cli()
+
+/// Delay N cycles using cycles register
+#define DELAY_CYCLES(count) {int till = count + ARM_DWT_CYCCNT; while (ARM_DWT_CYCCNT < till);}
+
+// Number of cycles sbi and cbi instructions take
+const int sbiCycles = 2;
+const int cbiCycles = 2;
+
+#define DISABLE_INTERRUPTS {uint8_t oldSREG = SREG; cli()
+#define RESTORE_INTERRUPTS SREG = oldSREG; }
 
 //mov r0, #COUNT
 //L:
@@ -335,7 +354,9 @@ class avrBitbangLedStrip
 	/// @note You must implement the print routines (see example)
 	////////////////////////////////////////////////////////////////////////
 	template <void printChar(const char *),void printInt(uint32_t)>
+#ifndef DISABLE_DEBUG_METHOD
 	static inline void debug(void);
+#endif
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Sends N bytes to the LED using bit-banging.
@@ -566,6 +587,7 @@ avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
 	}
 };
 
+#ifndef DISABLE_DEBUG_METHOD
 template<FAB_TDEF>
 template <void printChar(const char *),void printInt(uint32_t)>
 inline void
@@ -685,6 +707,7 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 	}
 	printChar("\n");
 }
+#endif
 
 template<FAB_TDEF>
 inline void
@@ -696,7 +719,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendBytes(const uint16_t count, const uint8_t * ar
 			break;
 		case TWO_PORT_SPLIT_BITBANG:
 		case TWO_PORT_INTLV_BITBANG:
-			// Note: the function will detect and handle the 2 modes
+			// Note: the function will detect and handle modes I and S
 			twoPortSoftwareSendBytes(count, array);
 			break;
 		case SPI_BITBANG:
@@ -755,8 +778,6 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
-	const int sbiCycles = 2;
-	const int cbiCycles = 2;
 	// If split mode, we send a block of half size
 	const uint16_t blockSize = (protocol == TWO_PORT_SPLIT_BITBANG) ? count/2 : count;
 	// Number of bytes per pixel
@@ -844,8 +865,6 @@ inline void
 avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
 	const uint16_t bytesPerPixel = 3; // (colors < RGBW) ? 3 : 4;
-//	const int sbiCycles = 2;
-//	const int cbiCycles = 2;
 
 	for(uint16_t c = 0; c < count/8/bytesPerPixel; c++) {
 		const uint16_t baseOffset = c * 8 * bytesPerPixel;
@@ -914,14 +933,6 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
-	const int sbiCycles = 2;
-	const int cbiCycles = 2;
-
-	// Debug: Verify values make sense.
-	static_assert(high1 >= sbiCycles, "CPU too slow");
-	static_assert(low1  >= cbiCycles, "CPU too slow");
-	static_assert(high0 >= sbiCycles, "CPU too slow");
-	static_assert(low0  >= cbiCycles, "CPU too slow");
 
 	for(uint16_t c=0; c < count; c++) {
 		const uint8_t val = array[c];
@@ -965,18 +976,13 @@ avrBitbangLedStrip<FAB_TVAR>::clear(const uint16_t numPixels)
 		spiSoftwareSendFrame(1 + numPixels + (numPixels+1)/2, 0);
 	} else {
 		// 1-wire: Delay next pixels to cause a refresh
-
-		// Disable interupts
-		uint8_t oldSREG = SREG;
- 		DISABLE_INTERRUPTS;
-
 		const uint8_t array[4] = {0,0,0,0};
+
+ 		DISABLE_INTERRUPTS;
 		for( uint16_t i = 0; i < numPixels; i++) {
 			sendBytes(bytesPerPixel, array);
 		}
-
-		// Restore interupts
-		SREG = oldSREG;
+		RESTORE_INTERRUPTS;
 	}
 }
 
@@ -984,17 +990,13 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value)
 {
-	// Disable interupts
-	uint8_t oldSREG = SREG;
-	DISABLE_INTERRUPTS;
-
 	const uint8_t array[4] = {value, value, value, value};
+
+	DISABLE_INTERRUPTS;
 	for( uint16_t i = 0; i < numPixels; i++) {
 		sendBytes(bytesPerPixel, array);
 	}
-
-	// Restore interupts
-	SREG = oldSREG;
+	RESTORE_INTERRUPTS;
 }
 
 // 3B raw input array
@@ -1004,21 +1006,15 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		const uint16_t numPixels,
 		const uint8_t * array)
 {
-	// Disable interupts
-	uint8_t oldSREG = SREG;
-	// cli();
  	DISABLE_INTERRUPTS;
-
 	sendBytes(numPixels * bytesPerPixel, array);
-
-	// Restore interupts
-	SREG = oldSREG;
+	RESTORE_INTERRUPTS;
 }
+
 
 // Since colors is a constant, the switch case will convert to 4 sendBytes max.
 #define SEND_REMAPPED_PIXELS(numPixels, array, sendWhite)          \
-		uint8_t oldSREG = SREG;                            \
- 		DISABLE_INTERRUPTS;                               \
+ 		DISABLE_INTERRUPTS;                                \
 		for (uint16_t i = 0; i < numPixels; i++) {         \
 			switch (colors) {                          \
 				case RGB:                          \
@@ -1058,7 +1054,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 					break;                     \
 			}                                          \
 		}                                                  \
-		SREG = oldSREG;                                    \
+		RESTORE_INTERRUPTS;
 
 #define sendWhiteMacro sendBytes(1, &array[i].w)
 #define SEND_REMAPPED_PIXELS_4B(numPixels, array) SEND_REMAPPED_PIXELS(numPixels, array, sendWhiteMacro)
@@ -1163,9 +1159,6 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		const uint16_t numPixels,
 		const uint32_t * pixelArray)
 {
-	// Disable interupts
-	uint8_t oldSREG = SREG;
-	//cli();
  	DISABLE_INTERRUPTS;
 
 	if (colors >= PIXEL_FORMAT_4B) {
@@ -1180,8 +1173,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		}
 	}
 
-	// Restore interupts
-	SREG = oldSREG;
+	RESTORE_INTERRUPTS;
 }
 
 // Palette input arrays
@@ -1206,8 +1198,6 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 			(bitsPerPixel == 8) ? 0xFF :
 			0x00;
 
-	// Disable interupts
-	const uint8_t oldSREG = SREG;
  	DISABLE_INTERRUPTS;
 
 	// Send each byte as 1 to 4 pixels
@@ -1228,9 +1218,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 		}
 	}
 end:
-	// Restore interupts
-	SREG = oldSREG;
-	return;
+	RESTORE_INTERRUPTS;
 }
 
 template<FAB_TDEF>
@@ -1254,8 +1242,6 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 			(bitsPerPixel == 8) ? 0xFF :
 			0x00;
 
-	// Disable interupts
-	const uint8_t oldSREG = SREG;
  	DISABLE_INTERRUPTS;
 
 	// Send each byte as 1 to 4 pixels
@@ -1276,9 +1262,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 		}
 	}
 end:
-	// Restore interupts
-	SREG = oldSREG;
-	return;
+	RESTORE_INTERRUPTS;
 }
 
 /// @todo Rewrite this to support R5G6B5, R4G4B4W4 and a variable brightness.
@@ -1296,9 +1280,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	// Debug: Support brightness 0..3
 	static_assert(brightness < 3, "Unsupported brightness level");
 
-	// Disable interupts
-	uint8_t oldSREG = SREG;
-	cli();
+ 	DISABLE_INTERRUPTS;
 
 	bytes[3] = 0;
 	for (int i = 0; i < count; i++) {
@@ -1309,8 +1291,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		sendBytes(bytesPerPixel, bytes);
 	}
 
-	// Restore interupts
-	SREG = oldSREG;
+	RESTORE_INTERRUPTS;
 }
 
 

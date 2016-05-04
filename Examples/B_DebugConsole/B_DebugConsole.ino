@@ -244,7 +244,7 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 
 	// Disable interupts, save the old interupt state
 	const uint8_t oldSREG = SREG;
- 	__builtin_avr_cli();
+ 	cli();
 
 	// Display the LEDs
 	for (uint8_t i = 0; i < numPixels; i++) {
@@ -352,7 +352,7 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
 		const uint8_t oldSREG = SREG;
- 		__builtin_avr_cli();
+ 		cli();
 		for (uint16_t i = 0; i < numPixels ; i++) {
 			myLeds.sendPixels(1, array);
 		}
@@ -407,7 +407,7 @@ void jitter()
 			const uint8_t * displayPt = &array[3*i];
 
 			const uint8_t oldSREG = SREG;
-			__builtin_avr_cli();
+			cli();
  			// Display same pattern twice, separated by a fixed pixel.
 			myLeds.sendPixels(numPixels/2, displayPt);
 			myLeds.sendPixels(1, &array[3*maxJitter]);
