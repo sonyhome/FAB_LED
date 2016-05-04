@@ -27,91 +27,14 @@
 // so make the IDE compile at -O2 instead of -Os (size).
 #pragma GCC optimize ("-O2")
 
-////////////////////////////////////////////////////////////////////////////////
-/// @brief Helper macro for palette index encoding into a char * array
-// For example, for encoding colors on 2 bits (4 colors, 0,1,2,3, in the palette),
-// Encoding color #3, using 2 bits per pixels, in the buffer for pixel i:
-// SET_PIXEL(buffer, i, 2, 3);
-////////////////////////////////////////////////////////////////////////////////
-#define SET_PIXEL(array, index, bitsPerPixel, color)          \
-	_SET_PIXEL((array), (index), (bitsPerPixel), (color))
-
-#define _SET_PIXEL(array, index, bitsPerPixel, color)                          \
-		array[index/(8/bitsPerPixel)] = (                              \
-			array[index/(8/bitsPerPixel)] &                        \
-			~(((1<<bitsPerPixel)-1) << ((index * bitsPerPixel)%8)) \
-		) | color << ((index * bitsPerPixel)%8)
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Helper macro for palette manipulation, extracts a pixel from a pixel
-/// array
-////////////////////////////////////////////////////////////////////////////////
-#define GET_PIXEL(array, index, bitsPerPixel)        \
-	_GET_PIXEL((array), (index), (bitsPerPixel))
-
-#define _GET_PIXEL(array, index, bitsPerPixel) (                                 \
-			array[index/(8/bitsPerPixel)] >> (index *bitsPerPixel)%8 \
-		) & ((1<<bitsPerPixel)-1)
-
-/// @brief Helper routine to compute the size of a char * array using a palette
-/// with a resolution of N bits per pixels.
-#define ARRAY_SIZE(numPixels, bitsPerPixel) (((numPixels)+7) / 8 * (bitsPerPixel))
-
-
-/// @brief Unused: Attempt to implement assertions
-#define CONCAT_TOKENS( TokenA, TokenB )       TokenA ## TokenB
-#define EXPAND_THEN_CONCAT( TokenA, TokenB )  CONCAT_TOKENS( TokenA, TokenB )
-#define ASSERT( Expression )                  enum{ EXPAND_THEN_CONCAT( ASSERT_line_, __LINE__ ) = 1 / !!( Expression ) }
-#define ASSERTM( Expression, Message )        enum{ EXPAND_THEN_CONCAT( Message ## _ASSERT_line_, __LINE__ ) = 1 / !!( Expression ) } 
-
-/// @brief Conversion between cycles and nano seconds
-#define NS_PER_SEC          1000000000ULL
-#define CYCLES_PER_SEC      ((uint64_t) (F_CPU))
-#define CYCLES(time_ns)     (((CYCLES_PER_SEC * (time_ns)) + NS_PER_SEC - 1ULL) / NS_PER_SEC)
-#define NANOSECONDS(cycles) (((cycles) * NS_PER_SEC + CYCLES_PER_SEC-1) / CYCLES_PER_SEC)
-
-////////////////////////////////////////////////////////////////////////////////
-// AVR (Arduino) bitBang LED support class, implements bitBang based sentBytes()
+/// @brief typed pixel structures for every LED protocol supported.
+/// These simplify access to a pixel byte array, or even to send typed pixels
+/// to the LED strip, as the programmer directly access pixel colors by name.
 ////////////////////////////////////////////////////////////////////////////////
 
-// AVR ports are referenced A through D by our template...
-enum avrLedStripPort {
-	A = 1,
-	B = 2,
-	C = 3,
-	D = 4,
-	E = 5,
-	F = 6
-};
-
-// Declares the byte order for every color of the LED strip
-enum pixelFormat {
-	NONE = 0, // Defaults to 3 bytes per pixel of unspecified order
-	RGB = 1,
-	GRB = 2,
-	BGR = 3,
-	RGBW = 4,
-	GRBW = 5,
-	BGRW = 6
-};
-
-// Declares the type of hardware protocol for the LED strip
-enum ledProtocol {
-	ONE_PORT_BITBANG = 1,   // Any LED with single data line
-	TWO_PORT_SPLIT_BITBANG = 2, // Same, but update 2 ports in parallel, sending 1/2 the array to one port, and the other 1/2 to the other
-	TWO_PORT_INTLV_BITBANG = 3, // Same, but update 2 ports in parallel, interleaving the pixels of the array
-	ONE_PORT_PWM = 4,       // Not implemented
-	ONE_PORT_UART = 5,      // Not implemented
-	SPI_BITBANG = 6,        // APA-102 and any LED with data and clock line
-	SPI_HARDWARE = 7        // Not implemented
-};
-
-#define PIXEL_FORMAT_4B RGBW
-#define PROTOCOL_SPI SPI_BITBANG
-
-// Defines pixel structures for every format supported. It can be used
-// to simplify access to a pixel byte array, or even to send typed pixels
-// to the LED strip.
+// sk6812 native color order
 typedef struct {
 	uint8_t r;
 	uint8_t g;
@@ -119,6 +42,7 @@ typedef struct {
 	uint8_t w;
 } rgbw;
 
+// sk6812 native color order
 typedef struct {
 	uint8_t g;
 	uint8_t r;
@@ -133,12 +57,14 @@ typedef struct {
 	uint8_t w;
 } bgrw;
 
+// apa102, apa106 native color order
 typedef struct {
 	uint8_t r;
 	uint8_t g;
 	uint8_t b;
 } rgb;
 
+// apa104, ws2812 native color order
 typedef struct {
 	uint8_t g;
 	uint8_t r;
@@ -151,9 +77,97 @@ typedef struct {
 	uint8_t r;
 } bgr;
 
+
 ////////////////////////////////////////////////////////////////////////////////
-/// Macros hack:
+/// @brief Helper macro for palette index encoding into a char * array when
+/// using an 8bit or less per pixel with a uint8_t type.
+////////////////////////////////////////////////////////////////////////////////
+
+/// @brief computes the size of a uint8_t array that uses pixels encoded with a
+/// palette. For example: uint8_t buffer[ARRAY_SIZE(128, 2)]; is an array of 128
+/// pixels encoded with 2 bits per pixel (4 colors).
+#define ARRAY_SIZE(numPixels, bitsPerPixel) (((numPixels)+7) / 8 * (bitsPerPixel))
+
+/// @brief Encode a pixel's color
+/// For example, for encoding colors on 2 bits (4 colors, 0,1,2,3, in the palette),
+/// Encoding color #3, using 2 bits per pixels, in the buffer for pixel i:
+/// SET_PIXEL(buffer, i, 2, 3);
+#define SET_PIXEL(array, index, bitsPerPixel, color)                           \
+	_SET_PIXEL((array), (index), (bitsPerPixel), (color))
+
+/// @brief extract a pixel's palette color index from a pixel array
+/// For example, colorIndex = GET_PIXEL(buffer, i, 2);
+#define GET_PIXEL(array, index, bitsPerPixel)                                  \
+	_GET_PIXEL((array), (index), (bitsPerPixel))
+
+// Internal definitions
+#define _SET_PIXEL(array, index, bitsPerPixel, color)                          \
+		array[index/(8/bitsPerPixel)] = (                              \
+			array[index/(8/bitsPerPixel)] &                        \
+			~(((1<<bitsPerPixel)-1) << ((index * bitsPerPixel)%8)) \
+		) | color << ((index * bitsPerPixel)%8)
+
+
+#define _GET_PIXEL(array, index, bitsPerPixel) (                               \
+			array[index/(8/bitsPerPixel)] >>(index*bitsPerPixel)%8 \
+		) & ((1<<bitsPerPixel)-1)
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Conversion between cycles and nano seconds
+////////////////////////////////////////////////////////////////////////////////
+#define NS_PER_SEC          1000000000ULL
+#define CYCLES_PER_SEC      ((uint64_t) (F_CPU))
+#define CYCLES(time_ns)     (((CYCLES_PER_SEC * (time_ns)) + NS_PER_SEC - 1ULL) / NS_PER_SEC)
+#define NANOSECONDS(cycles) (((cycles) * NS_PER_SEC + CYCLES_PER_SEC-1) / CYCLES_PER_SEC)
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief definitions for class template specializations
+////////////////////////////////////////////////////////////////////////////////
+
+/// @brief AVR ports are referenced A through F. For example ws2812b<D,6>
+enum avrLedStripPort {
+	A = 1,
+	B = 2,
+	C = 3,
+	D = 4,
+	E = 5,
+	F = 6
+};
+
+/// @brief Pixel type declares the byte order for every color of the LED strip
+/// when using 24/32 bit typed pixels
+enum pixelFormat {
+	NONE = 0, // Defaults to 3 bytes per pixel of unspecified order
+	RGB  = 1,
+	GRB  = 2,
+	BGR  = 3,
+	RGBW = 4,
+	GRBW = 5,
+	BGRW = 6
+};
+#define PIXEL_FORMAT_4B RGBW
+
+/// @brief Type of low-level method to send data for the LED strip (see sendBytes)
+enum ledProtocol {
+	ONE_PORT_BITBANG = 1,   // Any LED with single data line
+	TWO_PORT_SPLIT_BITBANG = 2, // Same, but update 2 ports in parallel, sending 1/2 the array to one port, and the other 1/2 to the other
+	TWO_PORT_INTLV_BITBANG = 3, // Same, but update 2 ports in parallel, interleaving the pixels of the array
+	ONE_PORT_PWM = 4,       // Not implemented
+	ONE_PORT_UART = 5,      // Not implemented
+	SPI_BITBANG = 6,        // APA-102 and any LED with data and clock line
+	SPI_HARDWARE = 7        // Not implemented
+};
+#define PROTOCOL_SPI SPI_BITBANG
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief undefined port hacks
 /// avoid compilation errors for arduinos that are missing some of the 4 ports
+/// by defining all the unknown ports to be any of the known ones. This quiets
+/// the compiler, and that fluff code optimizes away.
+////////////////////////////////////////////////////////////////////////////////
 
 // Define a DUMMY_PORT_ID that will be used to patch unknown ports to map to
 // the first existing port we find. Undefined ports won't be used but this
@@ -172,7 +186,7 @@ typedef struct {
 #define DUMMY_DDR   DDRC
 #endif // PORT
 
-// Now if any of the ports we support does not exist, re-map it to the dummy port.
+// If any of the ports we support does not exist, re-map it to the dummy port.
 #ifdef DUMMY_PORT
 #ifndef PORTA
 #define PORTA DUMMY_PORT
@@ -200,35 +214,49 @@ typedef struct {
 #endif // PORTF
 #endif // DUMMY_PORT
 
-// These macros access DDRn and PORTn I/O registers
-#ifdef PORTB
-// AVR/Arm processors on Arduino platform - They always have a port B
+
+////////////////////////////////////////////////////////////////////////////////
+#ifdef ARDUINO_ARCH_AVR
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Arduino AVR low level macros
+////////////////////////////////////////////////////////////////////////////////
+
+/// Port control register address I/O manipulation
 #define AVR_DDR(id) _AVR_DDR((id))
 #define _AVR_DDR(id) ((id==A) ? DDRA : (id==B) ? DDRB : (id==C) ? DDRC : \
 		(id==D) ? DDRD : (id==E) ? DDRE : DDRF)
+#define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
+#define FAB_DDR( portId) AVR_DDR(portId)
+
+/// Port address pin level manipulation
 #define AVR_PORT(id) _AVR_PORT((id))
 #define _AVR_PORT(id) ((id==A) ? PORTA : (id==B) ? PORTB : (id==C) ? PORTC : \
 		(id==D) ? PORTD : (id==E) ? PORTE : PORTF)
-
-#define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count);
-#define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
-#define FAB_DDR( portId) AVR_DDR(portId)
 #define FAB_PORT(portId) AVR_PORT(portId)
 #define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
 #define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin);
+
+/// Method to optimally delay N cycles for bitBang.
+#define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count);
+
 #define DISABLE_INTERRUPTS __builtin_avr_cli()
 
-#else // not(PORTB)
-// Non Arduino architecture - I dunno if I can configure the I/O ports
-// End-user must redefine AVR_DDR and AVR_PORT
-//#error "Unsupported Architecture"
-//#define DELAY_CYCLES(count) if (count > 0) __builtin_arm_delay_cycles(count);
+
+////////////////////////////////////////////////////////////////////////////////
+#elif defined(__arm__)
+////////////////////////////////////////////////////////////////////////////////
+/// @brief ARM0 - ARM3 low level macros
+////////////////////////////////////////////////////////////////////////////////
+
+#error "ARM0 and ARM3 are not yet supported"
+
 //#define DELAY_CYCLES(count) if (count > 0) SysTick_Wait(count)
 #define DELAY_CYCLES(count) if (count > 0) delay(count)
 
 #define SET_DDR_HIGH( portId, portPin)
 #define FAB_DDR( portId) AVR_DDR(portId)
 #define FAB_PORT(portId) AVR_PORT(portId)
+
 #define SET_PORT_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
 #define SET_PORT_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
 #define DISABLE_INTERRUPTS cli()
@@ -245,7 +273,18 @@ typedef struct {
 //...
 #define MY_NOP(__N)                 __asm ("nop");
 #define delay150cycles M_RPT(150, MY_NOP);
-#endif // PORTB
+
+////////////////////////////////////////////////////////////////////////////////
+#else
+////////////////////////////////////////////////////////////////////////////////
+/// @brief unknown processor architecture
+////////////////////////////////////////////////////////////////////////////////
+
+#error "Unsupported Architecture"
+
+////////////////////////////////////////////////////////////////////////////////
+#endif // CPU ARCHITECTURE
+////////////////////////////////////////////////////////////////////////////////
 
 
 
@@ -489,23 +528,6 @@ class avrBitbangLedStrip
 			delay(minMsRefresh);
 		}
 	}
-
-#if 0
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Convert RGB pixels to native WS2812B GBR format
-	////////////////////////////////////////////////////////////////////////
-	static inline void RGBtoGRB(uint8_t * pixel) {
-		uint8_t t = pixel[0];
-		pixel[0]=pixel[1];
-		pixel[1]=t;
-	}
-
-	////////////////////////////////////////////////////////////////////////
-	////////////////////////////////////////////////////////////////////////
-	static inline void RGBtoGRB(uint32_t * pixel) {
-		RGBtoGRB(&((uint8_t*)pixel)[1]);
-	}
-#endif
 };
 
 
@@ -896,10 +918,10 @@ avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, con
 	const int cbiCycles = 2;
 
 	// Debug: Verify values make sense.
-	ASSERT(high1 >= sbiCycles);
-	ASSERT(low1  >= cbiCycles);
-	ASSERT(high0 >= sbiCycles);
-	ASSERT(low0  >= cbiCycles);
+	static_assert(high1 >= sbiCycles, "CPU too slow");
+	static_assert(low1  >= cbiCycles, "CPU too slow");
+	static_assert(high0 >= sbiCycles, "CPU too slow");
+	static_assert(low0  >= cbiCycles, "CPU too slow");
 
 	for(uint16_t c=0; c < count; c++) {
 		const uint8_t val = array[c];
@@ -932,6 +954,7 @@ avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, con
 		}
 	}
 }
+
 
 template<FAB_TDEF>
 inline void
@@ -1171,8 +1194,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 		const uint8_t * palette)
 {
 	// Debug: Support simple palettes 2, 4, 16 or 256 colors
-	ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
-		bitsPerPixel == 4 || bitsPerPixel == 8);
+	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+		 bitsPerPixel == 4 || bitsPerPixel == 8,
+		"Unsupported palette size");
 
 	// 1,2 4 and 8 bit bitmasks. Note 3,5,6 don't make sense
 	// and 5bits is handled separately with uint16_t type.
@@ -1218,8 +1242,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 		const T * palette)
 {
 	// Debug: Support simple palettes 2, 4, 16 or 256 colors
-	ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
-		bitsPerPixel == 4 || bitsPerPixel == 8);
+	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+		bitsPerPixel == 4 || bitsPerPixel == 8,
+		"Unsupported palette size");
 
 	// 1,2 4 and 8 bit bitmasks. Note 3,5,6 don't make sense
 	// and 5bits is handled separately with uint16_t type.
@@ -1269,7 +1294,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	uint8_t bytes[4];
 
 	// Debug: Support brightness 0..3
-	ASSERT(brightness < 3);
+	static_assert(brightness < 3, "Unsupported brightness level");
 
 	// Disable interupts
 	uint8_t oldSREG = SREG;
