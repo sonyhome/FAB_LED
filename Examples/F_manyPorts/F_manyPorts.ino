@@ -104,7 +104,7 @@ grb  grbPixels[2*numPixels] = {};
 void parallelPixel(avrLedStripPort dataPortId, const uint16_t arraySize, const uint8_t * array)
 {
   const uint8_t oldSREG = SREG;
-  __builtin_avr_cli();
+  cli();
   for(uint16_t j = 0; j < arraySize; j++) {
     const uint8_t val = array[j];
     for(int8_t b=7; b>=0; b--) {
@@ -283,7 +283,7 @@ void loop()
     for(uint8_t i = 0; i < repeats; i++) {
       const uint8_t * array = (uint8_t*) grbPixels;
       const uint8_t oldSREG = SREG;
-      __builtin_avr_cli();
+      cli();
       for(uint16_t j = 0; j < 3*numPixels; j++) {
         strip0.sendBytes(1, &array[j]);
         strip1.sendBytes(1, &array[j]);

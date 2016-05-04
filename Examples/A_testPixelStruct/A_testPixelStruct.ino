@@ -238,7 +238,7 @@ void lukas(void)
   // Test rgb array
   // Disable interupts
   const uint8_t oldSREG = SREG;
-  __builtin_avr_cli();
+  cli();
   // Draw the pixels, sk strip is after ws strip hence pushed first.
   myWs2812.sendPixels(pixCut, rgbPixels);
   mySk6812b.sendPixels(NUM_PIXELS - pixCut, &rgbPixels[pixCut]);
@@ -248,14 +248,14 @@ void lukas(void)
   delay(1000);
   
   // Test grb array
-  __builtin_avr_cli();
+  cli();
   myWs2812.sendPixels(pixCut, grbPixels);
   mySk6812b.sendPixels(NUM_PIXELS - pixCut, &grbPixels[pixCut]);
   SREG = oldSREG;
   delay(1000);
   
   // Test rgbw array
-  __builtin_avr_cli();
+  cli();
   myWs2812.sendPixels(pixCut, &rgbwPixels[0]);
   mySk6812b.sendPixels(NUM_PIXELS - pixCut, &rgbwPixels[pixCut]);
   SREG = oldSREG;
@@ -268,7 +268,7 @@ void lukas(void)
     grbwPixels[i].b = 0;
     grbwPixels[i].w = 16*3;
   }
-  __builtin_avr_cli();
+  cli();
   myWs2812.sendPixels(pixCut, &grbwPixels[0]);
   mySk6812b.sendPixels(NUM_PIXELS - pixCut, &grbwPixels[pixCut]);
   SREG = oldSREG;
@@ -282,7 +282,7 @@ void mBlade(void)
 {
   // Disable interupts
   const uint8_t oldSREG = SREG;
-  __builtin_avr_cli();
+  cli();
   // Draw the pixels, sk strip is after ws strip hence pushed first.
   myWs2812.sendPixels(NUM_PIXELS-1,&rgbPixels[0]);
   myApa106.sendPixels(1,&rgbPixels[NUM_PIXELS-1]);
@@ -292,7 +292,7 @@ void mBlade(void)
   delay(1000);
   
   // Disable interupts
-  __builtin_avr_cli();
+  cli();
   // Draw the pixels, sk strip is after ws strip hence pushed first.
   myWs2812.sendPixels(NUM_PIXELS-1,&grbPixels[0]);
   myApa106.sendPixels(1,&grbPixels[NUM_PIXELS-1]);
@@ -302,7 +302,7 @@ void mBlade(void)
   delay(1000);
   
   // Disable interupts
-  __builtin_avr_cli();
+  cli();
   // Draw the pixels, sk strip is after ws strip hence pushed first.
   myWs2812.sendPixels(NUM_PIXELS-1,&rgbwPixels[0]);
   myApa106.sendPixels(1,&rgbwPixels[NUM_PIXELS-1]);

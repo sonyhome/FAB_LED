@@ -1,7 +1,7 @@
 #pragma GCC optimize ("-O2")
 
-////#include <FAB_LED.h>
-////ws2812b<D,6> myLeds;
+#include <FAB_LED.h>
+ws2812b<D,6> myLeds;
 
 ////////////////////////////////////////////////////////////////////////////////
 // This is an experiment to see how much memory FAB_LED uses.
