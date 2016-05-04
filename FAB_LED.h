@@ -143,6 +143,7 @@ enum pixelFormat {
 	RGB  = 1,
 	GRB  = 2,
 	BGR  = 3,
+
 	RGBW = 4,
 	GRBW = 5,
 	BGRW = 6
@@ -154,10 +155,12 @@ enum ledProtocol {
 	ONE_PORT_BITBANG = 1,   // Any LED with single data line
 	TWO_PORT_SPLIT_BITBANG = 2, // Same, but update 2 ports in parallel, sending 1/2 the array to one port, and the other 1/2 to the other
 	TWO_PORT_INTLV_BITBANG = 3, // Same, but update 2 ports in parallel, interleaving the pixels of the array
-	ONE_PORT_PWM = 4,       // Not implemented
-	ONE_PORT_UART = 5,      // Not implemented
-	SPI_BITBANG = 6,        // APA-102 and any LED with data and clock line
-	SPI_HARDWARE = 7        // Not implemented
+	EIGHT_PORT_BITBANG = 4, // Experimental
+	ONE_PORT_PWM = 5,       // Not implemented
+	ONE_PORT_UART = 6,      // Not implemented
+
+	SPI_BITBANG = 7,        // APA-102 and any LED with data and clock line
+	SPI_HARDWARE = 8        // Not implemented
 };
 #define PROTOCOL_SPI SPI_BITBANG
 
@@ -226,13 +229,13 @@ enum ledProtocol {
 #define _AVR_DDR(id) ((id==A) ? DDRA : (id==B) ? DDRB : (id==C) ? DDRC : \
 		(id==D) ? DDRD : (id==E) ? DDRE : DDRF)
 #define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
-#define FAB_DDR( portId) AVR_DDR(portId)
+#define FAB_DDR(portId, val) AVR_DDR(portId) = val
 
 /// Port address & pin level manipulation
 #define AVR_PORT(id) _AVR_PORT((id))
 #define _AVR_PORT(id) ((id==A) ? PORTA : (id==B) ? PORTB : (id==C) ? PORTC : \
 		(id==D) ? PORTD : (id==E) ? PORTE : PORTF)
-#define FAB_PORT(portId) AVR_PORT(portId)
+#define FAB_PORT(portId, val) AVR_PORT(portId) = val
 // Note: gcc converts these bit manipulations to sbi and cbi instructions
 #define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
 #define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin);
@@ -264,8 +267,8 @@ const int cbiCycles = 2;
 //#define DISABLE_DEBUG_METHOD
 
 #define SET_DDR_HIGH( portId, portPin)
-#define FAB_DDR( portId) AVR_DDR(portId)
-#define FAB_PORT(portId) AVR_PORT(portId)
+#define FAB_DDR( portId, val)
+#define FAB_PORT(portId, val)
 
 #define SET_PORT_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
 #define SET_PORT_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
@@ -294,6 +297,10 @@ const int cbiCycles = 2;
 #define delay150cycles M_RPT(150, MY_NOP);
 
 ////////////////////////////////////////////////////////////////////////////////
+#elif defined(ESP8266)
+
+#error "Unsupported Tensilica (ARC)Architecture"
+
 #else
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief unknown processor architecture
@@ -393,24 +400,31 @@ class avrBitbangLedStrip
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @bried Implements sendBytes for the SPI protocol only
+	/// @bried Implements sendBytes for the 1-port SPI protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
 	spiSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @brief Implements sendBytes for the 1-wire protocol (WS2812B)
+	/// @brief Implements sendBytes for the 1-ports protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
 	onePortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @brief Implements sendBytes for the 8-wire protocol (WS2812B)
+	/// @brief Implements sendBytes for the 2-ports protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
 	twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+	__attribute__ ((always_inline));
+
+	////////////////////////////////////////////////////////////////////////
+	/// @brief Implements sendBytes for the 8-ports protocol
+	////////////////////////////////////////////////////////////////////////
+	static inline void
+	eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
@@ -572,6 +586,10 @@ avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
 			SET_PORT_LOW(dataPortId,  dataPortPin);
 			SET_PORT_LOW(clockPortId, clockPortPin);
 			break;
+		case EIGHT_PORT_BITBANG:
+			FAB_DDR(dataPortId, 0xFF); // all pins out
+			FAB_PORT(dataPortId, 0x00); // all pins low
+			break;
 		case SPI_BITBANG:
 			// Init both ports as out
 			SET_DDR_HIGH(dataPortId, dataPortPin);
@@ -690,6 +708,9 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 		case TWO_PORT_INTLV_BITBANG:
 			printChar("TWO-PORT-INTERLEAVED (bitbang)");
 			break;
+		case EIGHT_PORT_BITBANG:
+			printChar("HEIGHT-PORT (bitbang)");
+			break;
 		case ONE_PORT_PWM:
 			printChar("ONE-PORT (PWM)");
 			break;
@@ -721,6 +742,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendBytes(const uint16_t count, const uint8_t * ar
 		case TWO_PORT_INTLV_BITBANG:
 			// Note: the function will detect and handle modes I and S
 			twoPortSoftwareSendBytes(count, array);
+			break;
+		case EIGHT_PORT_BITBANG:
+			eightPortSoftwareSendBytes(count, array);
 			break;
 		case SPI_BITBANG:
 			spiSoftwareSendBytes(count, array);
@@ -778,10 +802,12 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
+	// Number of bytes per pixel
+	const uint16_t bpp =  (colors < PIXEL_FORMAT_4B) ? 3 : 4;
+
 	// If split mode, we send a block of half size
 	const uint16_t blockSize = (protocol == TWO_PORT_SPLIT_BITBANG) ? count/2 : count;
-	// Number of bytes per pixel
-	const uint8_t bpp = (colors < RGBW) ? 3 : 4;
+
 	// Stride is two for interlacing to jump pixels going to the other port
 	const uint8_t stride = (protocol == TWO_PORT_SPLIT_BITBANG) ? 1 : 2;
 	const uint8_t increment = stride * bpp;
@@ -859,43 +885,68 @@ avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, con
 }
 #endif
 
-#if 0
 template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
-	const uint16_t bytesPerPixel = 3; // (colors < RGBW) ? 3 : 4;
+	const uint8_t numPins = 8;
+	const uint16_t bytesPerPixel =  (colors < PIXEL_FORMAT_4B) ? 3 : 4;
+	const uint16_t blockSize = count / numPins;
+	const uint16_t pixPerPort = blockSize / bytesPerPixel;
 
-	for(uint16_t c = 0; c < count/8/bytesPerPixel; c++) {
-		const uint16_t baseOffset = c * 8 * bytesPerPixel;
+	/// @note: I separate the pixel and byte walk even though it is not needed here, as
+	/// it may help dev the code. The compiler should detect at +O2 and merge the inference
+	/// variables as long as the separation is not used for specific tasks.
 
-		for(uint8_t byte = 0; byte < bytesPerPixel; byte++) {
-			const uint16_t byteOffset = baseOffset + byte; // * 8 ?
 
-			for(int8_t bit = 7; bit >= 0; bit--) {
-				uint8_t ones = 0;
-				for(uint8_t pin = 6; pin < 7; pin++) {
-					// pixels for each port pins are interlaced:
-					const uint16_t pinOffset = bytesPerPixel * pin;
-					// pixels for each port pins are in contiguous blocks.
-					//const uint16_t pinOffset = count/8 * pin;
-					const uint8_t val = array[byteOffset + pinOffset];
-					const bool isHigh = val & (1<<bit);
-					ones |= isHigh << pin;
+	// For each pixel
+	for(uint16_t c = 0; c < pixPerPort; c++) {
+		const uint16_t pixelBase = c * numPins * bytesPerPixel;
+
+		// Draw one 3 or 4 byte pixel on each pin
+		for(uint8_t byteIndex = 0; byteIndex < bytesPerPixel; byteIndex++) {
+			// index in array of the current byte to display
+			const uint16_t byteBase = pixelBase + byteIndex;
+
+			for(int8_t bitOffset = 7; bitOffset >= 0; bitOffset--) {
+				// bitmask contains the pins that must send a logical one.
+				// They stay high a bit longer
+				uint8_t bitmask = 0;
+
+				// Build bitmask: Get one bit from each block of the pixel array.
+				// Note: this does not implement more complex pixel interleaving.
+				// Note: this is too slow at 16MHz, maybe it'd be fast if it was
+				// all in register with a pipeline that reads one or two memory
+				// addresses at a time?
+//register unsigned char counter asm("r3"); // r2 - r7 , r8 r15
+// uint8_t my_variable __asm__("r12");
+
+				// Use very simple clear math steps using constants to allow
+				// gcc to optimize the code using the best CPU instructions
+				for(uint8_t pin = 0; pin < numPins; pin++) {
+					const uint16_t arrayStride = blockSize * pin;
+
+					const uint8_t val = array[byteBase + arrayStride];
+					const bool isHigh = val & (1 << bitOffset);
+					if (isHigh) {
+						bitmask |= 1 << pin;
+					}
 				}
-				FAB_PORT(dataPortId) = 0xFF;
-				//DELAY_CYCLES(high0 - sbiCycles);
-				// Set zeroes to low
-				FAB_PORT(dataPortId) &= ones;
-				DELAY_CYCLES(8); // high1 - sbiCycles - high0);
-				// Set ones to low
-				FAB_PORT(dataPortId) &= 0x00;
+
+				// Set all HIGH, set LOW all zeros, set LOW zeros and ones.
+				FAB_PORT(dataPortId, 0xFF);
+				DELAY_CYCLES(high0 - sbiCycles);
+
+				FAB_PORT(dataPortId, bitmask);
+				DELAY_CYCLES(high1 - sbiCycles - high0);
+
+				FAB_PORT(dataPortId, 0x00);
+				// Let's assume we'll spend enough time doing math to not need to wait
 				//DELAY_CYCLES(low0 - cbiCycles);
 			}
 		}
 	}
 }
-#endif
 
 #if 0
 template<FAB_TDEF>
@@ -922,7 +973,7 @@ avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, c
 				}
 			}
 			DELAY_CYCLES(10);
-			FAB_PORT(dataPortId) = 0x0;
+			FAB_PORT(dataPortId, 0x0);
 //			DELAY_CYCLES(4);
 		}
 	}
@@ -1337,12 +1388,8 @@ class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
 
 
 ////////////////////////////////////////////////////////////////////////////////
-// WS2812BS (Use all 8 pins of a port to send the array interlaced, in parallel)
-// If you choose port D, pixel 0 goes to D0, 1 to D1... 7 to D7. Then Pixel 8
-// goes to D0, 9 to D1.. 15 to D7, etc.
-// This method is much faster to update a lot of pixels, as it takes advantage
-// of the bitbanging delays to push pixels to the LED strips connected to the
-// other port pins.
+// WS2812BS - Bitbang the pixels to two ports in parallel.
+// The pixel array is split in two. Each port displays a half.
 ////////////////////////////////////////////////////////////////////////////////
 #define FAB_TVAR_WS2812BS WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
 	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, GRB, TWO_PORT_SPLIT_BITBANG
@@ -1355,14 +1402,26 @@ class ws2812bs : public avrBitbangLedStrip<FAB_TVAR_WS2812BS>
 };
 #undef FAB_TVAR_WS2812BS
 
+////////////////////////////////////////////////////////////////////////////////
+// WS2812B8S - Bitbang the pixels to eight ports in parallel.
+// The pixel array is split in 8. Each port displays a portion.
+////////////////////////////////////////////////////////////////////////////////
+#define FAB_TVAR_WS2812B8S WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, 0, dataPortId, 0, GRB, EIGHT_PORT_BITBANG
+template<avrLedStripPort dataPortId>
+class ws2812b8s : public avrBitbangLedStrip<FAB_TVAR_WS2812B8S>
+{
+	public:
+	ws2812b8s() : avrBitbangLedStrip<FAB_TVAR_WS2812B8S>() {};
+	~ws2812b8s() {};
+};
+#undef FAB_TVAR_WS2812B8S
+
 
 ////////////////////////////////////////////////////////////////////////////////
-// WS2812BI (Use all 8 pins of a port to send the array interlaced, in parallel)
-// If you choose port D, pixel 0 goes to D0, 1 to D1... 7 to D7. Then Pixel 8
-// goes to D0, 9 to D1.. 15 to D7, etc.
-// This method is much faster to update a lot of pixels, as it takes advantage
-// of the bitbanging delays to push pixels to the LED strips connected to the
-// other port pins.
+// WS2812BI - Bitbang the pixels to two ports in parallel.
+// The pixels array is interleaved. One port displays the odd pixels, while the
+// other portdisplays the even pixels.
 ////////////////////////////////////////////////////////////////////////////////
 #define FAB_TVAR_WS2812BI WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
 	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, GRB, TWO_PORT_INTLV_BITBANG

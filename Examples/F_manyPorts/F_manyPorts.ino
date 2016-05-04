@@ -50,8 +50,8 @@
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs at
 /// once. Maybe no more than 8 at full power (max is 60mA at 5V is 0.3Watt/LED).
-const uint16_t numPixels = 4*8;
-const uint16_t maxBrightness = 16;
+const uint16_t numPixels = 8*8;
+const uint16_t maxBrightness = 8;
 
 // Custom LED declaration
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
@@ -88,8 +88,9 @@ myLEDtype<D,5> strip5;
 myLEDtype<D,6> strip6;
 myLEDtype<D,7> strip7;
 
-ws2812bs<D,6,D,7> strip_split67;
-ws2812bi<D,6,D,7> strip_intlv67;
+ws2812b8s<D> strip_split8;
+ws2812bs<D,6,D,7> strip_split2;
+ws2812bi<D,6,D,7> strip_intlv2;
 
 ////////////////////////////////////////////////////////////////////////////////
 // We define the pixel array we'll store the actual red, green, blue values in.
@@ -207,7 +208,7 @@ void setup()
 void loop()
 {
   const uint8_t iters = 16;
-  const uint8_t repeats = 4;
+  const uint8_t repeats = 8;
 
   // Default way a user would use.
   Serial.println("Update LED strips one after the other.");
@@ -227,6 +228,17 @@ void loop()
   off(1000);
   delay(250);
 
+  // Send pixels to 8 ports. Will not work on Arduino.
+  Serial.println("Update LED strips 0 to 7 in parallel, split: sending 1/8 the array to each one");
+  for(uint8_t n = 0; n < iters; n++) {
+    off(numPixels);
+    for(uint8_t i = 0; i < repeats; i++) {
+      strip_split8.sendPixels(2*numPixels, grbPixels);
+    }
+  }
+  off(1000);
+  delay(250);
+
   // send first half the pixel array to strip D6, the 2n half to D7,
   // notice colors will be rgbrgb etc. and strip D7 will pick up the
   // sequence where strip 6 stopped.
@@ -236,7 +248,7 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_split67.sendPixels(2*numPixels, grbPixels);
+      strip_split2.sendPixels(2*numPixels, grbPixels);
     }
   }
   off(1000);
@@ -252,7 +264,7 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_intlv67.sendPixels(2*numPixels, grbPixels);
+      strip_intlv2.sendPixels(2*numPixels, grbPixels);
     }
   }
   off(1000);
