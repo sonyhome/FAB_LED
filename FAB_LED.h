@@ -526,13 +526,16 @@ class avrBitbangLedStrip
 			const uint8_t * pixelArray,
 			const paletteColors * palette) __attribute__ ((always_inline));
 
-/*	template <pixelType> 
-	static inline void sendPixels2D(
+/*
+	template <pixelType> 
+	static inline void sendPixelsRemap(
 			const uint16_t numPixels,
+			const uint16_t * mapPixels,
 			const pixelType * array,
 			const uint16_t X,
 			const uint16_t Y) __attribute__ ((always_inline));
 */
+
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Sends an array of 3 pixels per 16bit words to the LEDs
@@ -943,7 +946,10 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
-	const uint16_t blockSize = count / 8;
+	const uint16_t bpp =  (colors < PIXEL_FORMAT_4B) ? 3 : 4;
+	const uint16_t blockSize __asm__("r14") = count / (clockPortPin - dataPortPin + 1) / bpp * bpp;
+
+	// Buffer one byte of each port in register
 	uint8_t r0 __asm__("r2") = 0;
 	uint8_t r1 __asm__("r3") = 0;
 	uint8_t r2 __asm__("r4") = 0;
@@ -953,57 +959,156 @@ avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, c
 	uint8_t r6 __asm__("r8") = 0;
 	uint8_t r7 __asm__("r9") = 0;
 
-	for(uint16_t c __asm__("r11") = 0; c < blockSize; c++) {
-		for(int8_t b __asm__("r12") = 7; b >= 0; b--) {
-			uint8_t bitmask __asm__("r10") = 0;
+	// Since bits for each port are sent delayed by one cycle to
+	// implement the memory access pipeline, we must leave the
+	// ports not yet in use set to LOW level. Once the pipeline
+	// is initialized fully onMask == 0xFF, and we always set it
+	// to high to send a zero or a one.
+	uint8_t onMask __asm__("r10") = 0;
 
-			bitmask |=  r0 & 1      ; r0 >>= 1;
-			bitmask |= (r1 & 1) << 1; r1 >>= 1;
-			bitmask |= (r2 & 1) << 2; r2 >>= 1;
-			bitmask |= (r3 & 1) << 3; r3 >>= 1;
-			bitmask |= (r4 & 1) << 4; r4 >>= 1;
-			bitmask |= (r5 & 1) << 5; r5 >>= 1;
-			bitmask |= (r6 & 1) << 6; r6 >>= 1;
-			bitmask |= (r7 & 1) << 7; r7 >>= 1;
+	for(uint16_t c __asm__("r12") = 0; c < blockSize + 1; ++c) {
+		for(int8_t b __asm__("r13") = 7; b >= 0; --b) {
+			uint8_t bitmask __asm__("r10") = 0;
 
 			// Load ONE byte per iteration
 			// Skip end condition check to reduce CPU cycles.
 			// It is expected that the LED strip won't have extra pixels.
-			if ((b >= dataPortPin) && (b <= clockPortPin)) switch (b) {
+			switch (b) {
 				case 0:
-					r0 = array[c];
+					// By checking statically if rX is read from memory, we
+					// avoid changing it, and the compiler will optimize out all
+					// the code including bitmask setting. On 16MHz Uno, we can
+					// only set bitmask for 6 ports before the strip resets.
+					if (0 == dataPortPin) {
+						onMask |= 1;
+						r0 = array[c];
+					}
+
+					if (r0 & 0b10000000) bitmask |= 1;
+					if (r1 & 0b01000000) bitmask |= 2;
+					if (r2 & 0b00100000) bitmask |= 4;
+					if (r3 & 0b00010000) bitmask |= 8;
+					if (r4 & 0b00001000) bitmask |= 16;
+					if (r5 & 0b00000100) bitmask |= 32;
+					if (r6 & 0b00000010) bitmask |= 64;
+					if (r7 & 0b00000001) bitmask |= 128;
 					break;
 				case 1:
-					r1 = array[c + 1 * blockSize];
+					if ((1 >= dataPortPin) && (1 <= clockPortPin)) {
+						onMask |= 2;
+						r1 = array[c + (1-dataPortPin) * blockSize];
+					}
+
+					if (r0 & 0b00000001) bitmask |= 1;
+					if (r1 & 0b10000000) bitmask |= 2;
+					if (r2 & 0b01000000) bitmask |= 4;
+					if (r3 & 0b00100000) bitmask |= 8;
+					if (r4 & 0b00010000) bitmask |= 16;
+					if (r5 & 0b00001000) bitmask |= 32;
+					if (r6 & 0b00000100) bitmask |= 64;
+					if (r7 & 0b00000010) bitmask |= 128;
 					break;
 				case 2:
-					r2 = array[c + 2 * blockSize];
+					if ((2 >= dataPortPin) && (2 <= clockPortPin)) {
+						onMask |= 4;
+						r2 = array[c + (2-dataPortPin) * blockSize];
+					}
+
+					if (r0 & 0b00000010) bitmask |= 1;
+					if (r1 & 0b00000001) bitmask |= 2;
+					if (r2 & 0b10000000) bitmask |= 4;
+					if (r3 & 0b01000000) bitmask |= 8;
+					if (r4 & 0b00100000) bitmask |= 16;
+					if (r5 & 0b00010000) bitmask |= 32;
+					if (r6 & 0b00001000) bitmask |= 64;
+					if (r7 & 0b00000100) bitmask |= 128;
 					break;
 				case 3:
-					r3 = array[c + 3 * blockSize];
+					if ((3 >= dataPortPin) && (3 <= clockPortPin)) {
+						onMask |= 8;
+						r3 = array[c + (3-dataPortPin) * blockSize];
+					}
+
+					if (r0 & 0b00000100) bitmask |= 1;
+					if (r1 & 0b00000010) bitmask |= 2;
+					if (r2 & 0b00000001) bitmask |= 4;
+					if (r3 & 0b10000000) bitmask |= 8;
+					if (r4 & 0b01000000) bitmask |= 16;
+					if (r5 & 0b00100000) bitmask |= 32;
+					if (r6 & 0b00010000) bitmask |= 64;
+					if (r7 & 0b00001000) bitmask |= 128;
 					break;
 				case 4:
-					r4 = array[c + 4 * blockSize];
+					if ((4 >= dataPortPin) && (4 <= clockPortPin)) {
+						onMask |= 16;
+						r4 = array[c + (4-dataPortPin) * blockSize];
+					}
+
+					if (r0 & 0b00001000) bitmask |= 1;
+					if (r1 & 0b00000100) bitmask |= 2;
+					if (r2 & 0b00000010) bitmask |= 4;
+					if (r3 & 0b00000001) bitmask |= 8;
+					if (r4 & 0b10000000) bitmask |= 16;
+					if (r5 & 0b01000000) bitmask |= 32;
+					if (r6 & 0b00100000) bitmask |= 64;
+					if (r7 & 0b00010000) bitmask |= 128;
 					break;
 				case 5:
-					r5 = array[c + 5 * blockSize];
+					if ((5 >= dataPortPin) && (5 <= clockPortPin)) {
+						onMask |= 32;
+						r5 = array[c + (5-dataPortPin) * blockSize];
+					}
+
+					if (r0 & 0b00010000) bitmask |= 1;
+					if (r1 & 0b00001000) bitmask |= 2;
+					if (r2 & 0b00000100) bitmask |= 4;
+					if (r3 & 0b00000010) bitmask |= 8;
+					if (r4 & 0b00000001) bitmask |= 16;
+					if (r5 & 0b10000000) bitmask |= 32;
+					if (r6 & 0b01000000) bitmask |= 64;
+					if (r7 & 0b00100000) bitmask |= 128;
 					break;
 				case 6:
-					r6 = array[c + 6 * blockSize];
+					if ((6 >= dataPortPin) && (6 <= clockPortPin)) {
+						onMask |= 64;
+						r6 = array[c + (6-dataPortPin) * blockSize];
+					}
+
+					if (r0 & 0b00100000) bitmask |= 1;
+					if (r1 & 0b00010000) bitmask |= 2;
+					if (r2 & 0b00001000) bitmask |= 4;
+					if (r3 & 0b00000100) bitmask |= 8;
+					if (r4 & 0b00000010) bitmask |= 16;
+					if (r5 & 0b00000001) bitmask |= 32;
+					if (r6 & 0b10000000) bitmask |= 64;
+					if (r7 & 0b01000000) bitmask |= 128;
 					break;
 				case 7:
-					r7 = array[c + 7 * blockSize];
+					if ((7 >= dataPortPin) && (7 <= clockPortPin)) {
+						onMask |= 128;
+						r7 = array[c + (7-dataPortPin) * blockSize];
+					}
+
+					if (r0 & 0b01000000) bitmask |= 1;
+					if (r1 & 0b00100000) bitmask |= 2;
+					if (r2 & 0b00010000) bitmask |= 4;
+					if (r3 & 0b00001000) bitmask |= 8;
+					if (r4 & 0b00000100) bitmask |= 16;
+					if (r5 & 0b00000010) bitmask |= 32;
+					if (r6 & 0b00000001) bitmask |= 64;
+					if (r7 & 0b10000000) bitmask |= 128;
 					break;
-			}
+				}
 
 			// Set all HIGH, set LOW all zeros, set LOW zeros and ones.
-			FAB_PORT(dataPortId, 0xFF);
+			FAB_PORT(dataPortId, onMask);
 			DELAY_CYCLES(high0 - sbiCycles);
 
 			FAB_PORT(dataPortId, bitmask);
-			DELAY_CYCLES(2 + high1 - high0 + sbiCycles);
+			DELAY_CYCLES( high1 - high0 + sbiCycles);
 
 			FAB_PORT(dataPortId, 0x00);
+			// Estimate overhead of math above to ~ 20 cycles
 			DELAY_CYCLES(low0 - cbiCycles - 20);
 		}
 	}
