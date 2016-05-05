@@ -50,7 +50,7 @@
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs at
 /// once. Maybe no more than 8 at full power (max is 60mA at 5V is 0.3Watt/LED).
-const uint16_t numPixels = 8*8;
+const uint16_t numPixels = 16*8;
 const uint16_t maxBrightness = 8;
 
 // Custom LED declaration
@@ -88,7 +88,7 @@ myLEDtype<D,5> strip5;
 myLEDtype<D,6> strip6;
 myLEDtype<D,7> strip7;
 
-ws2812b8s<D> strip_split8;
+ws2812b8s<D,4,7> strip_split8;
 ws2812bs<D,6,D,7> strip_split2;
 ws2812bi<D,6,D,7> strip_intlv2;
 
@@ -97,7 +97,7 @@ ws2812bi<D,6,D,7> strip_intlv2;
 // Note this library supports many pixel structures, and it is best to use the
 // structure that holds the colors in the same order as your LED strip model.
 // If you change the LED type make sure you use the proper byte order here.
-grb  grbPixels[2*numPixels] = {};
+grb  grbPixels[numPixels] = {};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sends an array at the same time to all 8 channels of a given port. Note this
@@ -194,7 +194,7 @@ void setup()
   off(1000);
 
   // Create a repeating RGB display
-  for(uint8_t i = 0; i < 2*numPixels; i++) {
+  for(uint8_t i = 0; i < numPixels; i++) {
     grbPixels[i].r = maxBrightness * ( i   %3 == 0);
     grbPixels[i].g = maxBrightness * ((i+2)%3 == 0);
     grbPixels[i].b = maxBrightness * ((i+1)%3 == 0);
@@ -215,25 +215,25 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip0.sendPixels(numPixels, grbPixels);
-      strip1.sendPixels(numPixels, grbPixels);
-      strip2.sendPixels(numPixels, grbPixels);
-      strip3.sendPixels(numPixels, grbPixels);
-      strip4.sendPixels(numPixels, grbPixels);
-      strip5.sendPixels(numPixels, grbPixels);
-      strip6.sendPixels(numPixels, grbPixels);
-      strip7.sendPixels(numPixels, grbPixels);
+      strip0.sendPixels(numPixels/8, grbPixels);
+      strip1.sendPixels(numPixels/8, &grbPixels[numPixels/8]);
+      strip2.sendPixels(numPixels/8, &grbPixels[2*numPixels/8]);
+      strip3.sendPixels(numPixels/8, &grbPixels[3*numPixels/8]);
+      strip4.sendPixels(numPixels/8, &grbPixels[4*numPixels/8]);
+      strip5.sendPixels(numPixels/8, &grbPixels[5*numPixels/8]);
+      strip6.sendPixels(numPixels/8, &grbPixels[6*numPixels/8]);
+      strip7.sendPixels(numPixels/8, &grbPixels[7*numPixels/8]);
     }
   }
   off(1000);
   delay(250);
 
-  // Send pixels to 8 ports. Will not work on Arduino.
+  // Send pixels to 8 ports in parallel. Will not work on Arduino.
   Serial.println("Update LED strips 0 to 7 in parallel, split: sending 1/8 the array to each one");
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_split8.sendPixels(2*numPixels, grbPixels);
+      strip_split8.sendPixels(numPixels, grbPixels);
     }
   }
   off(1000);
@@ -248,7 +248,10 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_split2.sendPixels(2*numPixels, grbPixels);
+      strip_split2.sendPixels(numPixels, grbPixels);
+      strip_split2.sendPixels(numPixels, grbPixels);
+      strip_split2.sendPixels(numPixels, grbPixels);
+      strip_split2.sendPixels(numPixels, grbPixels);
     }
   }
   off(1000);
@@ -264,7 +267,10 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_intlv2.sendPixels(2*numPixels, grbPixels);
+      strip_intlv2.sendPixels(numPixels, grbPixels);
+      strip_intlv2.sendPixels(numPixels, grbPixels);
+      strip_intlv2.sendPixels(numPixels, grbPixels);
+      strip_intlv2.sendPixels(numPixels, grbPixels);
     }
   }
   off(1000);

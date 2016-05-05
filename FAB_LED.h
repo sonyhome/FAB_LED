@@ -885,100 +885,129 @@ avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, con
 }
 #endif
 
-template<FAB_TDEF>
-inline void
-avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
-{
-	const uint8_t numPins = 8;
-	const uint16_t bytesPerPixel =  (colors < PIXEL_FORMAT_4B) ? 3 : 4;
-	const uint16_t blockSize = count / numPins;
-	const uint16_t pixPerPort = blockSize / bytesPerPixel;
-
-	/// @note: I separate the pixel and byte walk even though it is not needed here, as
-	/// it may help dev the code. The compiler should detect at +O2 and merge the inference
-	/// variables as long as the separation is not used for specific tasks.
-
-
-	// For each pixel
-	for(uint16_t c = 0; c < pixPerPort; c++) {
-		const uint16_t pixelBase = c * numPins * bytesPerPixel;
-
-		// Draw one 3 or 4 byte pixel on each pin
-		for(uint8_t byteIndex = 0; byteIndex < bytesPerPixel; byteIndex++) {
-			// index in array of the current byte to display
-			const uint16_t byteBase = pixelBase + byteIndex;
-
-			for(int8_t bitOffset = 7; bitOffset >= 0; bitOffset--) {
-				// bitmask contains the pins that must send a logical one.
-				// They stay high a bit longer
-				uint8_t bitmask = 0;
-
-				// Build bitmask: Get one bit from each block of the pixel array.
-				// Note: this does not implement more complex pixel interleaving.
-				// Note: this is too slow at 16MHz, maybe it'd be fast if it was
-				// all in register with a pipeline that reads one or two memory
-				// addresses at a time?
-//register unsigned char counter asm("r3"); // r2 - r7 , r8 r15
-// uint8_t my_variable __asm__("r12");
-
-				// Use very simple clear math steps using constants to allow
-				// gcc to optimize the code using the best CPU instructions
-				for(uint8_t pin = 0; pin < numPins; pin++) {
-					const uint16_t arrayStride = blockSize * pin;
-
-					const uint8_t val = array[byteBase + arrayStride];
-					const bool isHigh = val & (1 << bitOffset);
-					if (isHigh) {
-						bitmask |= 1 << pin;
-					}
-				}
-
-				// Set all HIGH, set LOW all zeros, set LOW zeros and ones.
-				FAB_PORT(dataPortId, 0xFF);
-				DELAY_CYCLES(high0 - sbiCycles);
-
-				FAB_PORT(dataPortId, bitmask);
-				DELAY_CYCLES(high1 - sbiCycles - high0);
-
-				FAB_PORT(dataPortId, 0x00);
-				// Let's assume we'll spend enough time doing math to not need to wait
-				//DELAY_CYCLES(low0 - cbiCycles);
-			}
-		}
-	}
-}
-
 #if 0
 template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
-	const uint16_t blockSize = count /2;
+	const uint16_t blockSize = count / 8;
+	uint8_t r0 __asm__("r2") = 0;
+	uint8_t r1 __asm__("r3") = 0;
+	uint8_t r2 __asm__("r4") = 0;
+	uint8_t r3 __asm__("r5") = 0;
+	uint8_t r4 __asm__("r6") = 0;
+	uint8_t r5 __asm__("r7") = 0;
+	uint8_t r6 __asm__("r8") = 0;
+	uint8_t r7 __asm__("r9") = 0;
 
-	for(uint16_t pos = 0; pos < blockSize; pos++) {
-//		uint8_t val = array[pos];
-		for(int8_t bit = 7; bit >= 0; bit--) {
+	for(register uint16_t c = 0; c < blockSize; c++) {
+/*
+		r0 = array[c];
+		r1 = array[c + 1 * blockSize];
+		r2 = array[c + 2 * blockSize];
+		r3 = array[c + 3 * blockSize];
+*/
+		r4 = array[c + 4 * blockSize];
+		r5 = array[c + 5 * blockSize];
+		r6 = array[c + 6 * blockSize];
+		r7 = array[c + 7 * blockSize];
+		for(register int8_t b = 7; b >= 0; b--) {
+			uint8_t bitmask __asm__("r10") = 0;
 
-			for(uint8_t pin = 5; pin < 7; pin++) {
-				//const uint8_t val = array[pos];
-				const uint8_t val = array[(pin-5)*blockSize + pos];
-				const bool bitHigh = (val >> bit) & 0x1;
+			bitmask |=  r0 & 1      ; r0 >>= 1;
+			bitmask |= (r1 & 1) << 1; r1 >>= 1;
+			bitmask |= (r2 & 1) << 2; r2 >>= 1;
+			bitmask |= (r3 & 1) << 3; r3 >>= 1;
+			bitmask |= (r4 & 1) << 4; r4 >>= 1;
+			bitmask |= (r5 & 1) << 5; r5 >>= 1;
+			bitmask |= (r6 & 1) << 6; r6 >>= 1;
+			bitmask |= (r7 & 1) << 7; r7 >>= 1;
 
-				if (bitHigh) {
-					SET_PORT_HIGH(dataPortId, pin);
-				} else {
-					SET_PORT_HIGH(dataPortId, pin);
-					DELAY_CYCLES(2);
-					SET_PORT_LOW(dataPortId, pin);
-				}
-			}
-			DELAY_CYCLES(10);
-			FAB_PORT(dataPortId, 0x0);
-//			DELAY_CYCLES(4);
+			// Set all HIGH, set LOW all zeros, set LOW zeros and ones.
+			FAB_PORT(dataPortId, 0xFF);
+			DELAY_CYCLES(2); //high0 - sbiCycles);
+
+//			FAB_PORT(dataPortId, bitmask);
+			AVR_PORT(dataPortId) = bitmask;
+			DELAY_CYCLES(6); //high1 - sbiCycles - high0);
+
+			FAB_PORT(dataPortId, 0x00);
+			// Let's assume we'll spend enough time doing math to not need to wait
+			DELAY_CYCLES(10); //low0 - cbiCycles);
 		}
 	}
 }
 #endif
+
+template<FAB_TDEF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+{
+	const uint16_t blockSize = count / 8;
+	uint8_t r0 __asm__("r2") = 0;
+	uint8_t r1 __asm__("r3") = 0;
+	uint8_t r2 __asm__("r4") = 0;
+	uint8_t r3 __asm__("r5") = 0;
+	uint8_t r4 __asm__("r6") = 0;
+	uint8_t r5 __asm__("r7") = 0;
+	uint8_t r6 __asm__("r8") = 0;
+	uint8_t r7 __asm__("r9") = 0;
+
+	for(uint16_t c __asm__("r11") = 0; c < blockSize; c++) {
+		for(int8_t b __asm__("r12") = 7; b >= 0; b--) {
+			uint8_t bitmask __asm__("r10") = 0;
+
+			bitmask |=  r0 & 1      ; r0 >>= 1;
+			bitmask |= (r1 & 1) << 1; r1 >>= 1;
+			bitmask |= (r2 & 1) << 2; r2 >>= 1;
+			bitmask |= (r3 & 1) << 3; r3 >>= 1;
+			bitmask |= (r4 & 1) << 4; r4 >>= 1;
+			bitmask |= (r5 & 1) << 5; r5 >>= 1;
+			bitmask |= (r6 & 1) << 6; r6 >>= 1;
+			bitmask |= (r7 & 1) << 7; r7 >>= 1;
+
+			// Load ONE byte per iteration
+			// Skip end condition check to reduce CPU cycles.
+			// It is expected that the LED strip won't have extra pixels.
+			if ((b >= dataPortPin) && (b <= clockPortPin)) switch (b) {
+				case 0:
+					r0 = array[c];
+					break;
+				case 1:
+					r1 = array[c + 1 * blockSize];
+					break;
+				case 2:
+					r2 = array[c + 2 * blockSize];
+					break;
+				case 3:
+					r3 = array[c + 3 * blockSize];
+					break;
+				case 4:
+					r4 = array[c + 4 * blockSize];
+					break;
+				case 5:
+					r5 = array[c + 5 * blockSize];
+					break;
+				case 6:
+					r6 = array[c + 6 * blockSize];
+					break;
+				case 7:
+					r7 = array[c + 7 * blockSize];
+					break;
+			}
+
+			// Set all HIGH, set LOW all zeros, set LOW zeros and ones.
+			FAB_PORT(dataPortId, 0xFF);
+			DELAY_CYCLES(high0 - sbiCycles);
+
+			FAB_PORT(dataPortId, bitmask);
+			DELAY_CYCLES(2 + high1 - high0 + sbiCycles);
+
+			FAB_PORT(dataPortId, 0x00);
+			DELAY_CYCLES(low0 - cbiCycles - 20);
+		}
+	}
+}
 
 template<FAB_TDEF>
 inline void
@@ -1407,8 +1436,8 @@ class ws2812bs : public avrBitbangLedStrip<FAB_TVAR_WS2812BS>
 // The pixel array is split in 8. Each port displays a portion.
 ////////////////////////////////////////////////////////////////////////////////
 #define FAB_TVAR_WS2812B8S WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, 0, dataPortId, 0, GRB, EIGHT_PORT_BITBANG
-template<avrLedStripPort dataPortId>
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit1, dataPortId, dataPortBit2, GRB, EIGHT_PORT_BITBANG
+template<avrLedStripPort dataPortId, uint8_t dataPortBit1, uint8_t dataPortBit2>
 class ws2812b8s : public avrBitbangLedStrip<FAB_TVAR_WS2812B8S>
 {
 	public:
