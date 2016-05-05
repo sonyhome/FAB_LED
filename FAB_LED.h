@@ -514,6 +514,14 @@ class avrBitbangLedStrip
 	/// @note bitsPerPixel is a template constant to allow the compiler to
 	/// optimize the bit-masking code.
 	////////////////////////////////////////////////////////////////////////
+	template <const uint8_t bitsPerPixel, class pixelColors> // @note does not support uint32_t uint8_t.
+	static inline void sendPixels (
+			const uint16_t count,
+			const uint8_t * pixelArray,
+			const uint8_t * reds,
+			const uint8_t * greens,
+			const uint8_t * blues) __attribute__ ((always_inline));
+
 	template <const uint8_t bitsPerPixel>
 	static inline void sendPixels (
 			const uint16_t count,
@@ -1358,6 +1366,58 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		}
 	}
 
+	RESTORE_INTERRUPTS;
+}
+
+// Palette input arrays
+template<FAB_TDEF>
+template <const uint8_t bitsPerPixel, class T>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::sendPixels (
+		const uint16_t count,
+		const uint8_t * pixelArray,
+		const uint8_t * reds,
+		const uint8_t * greens,
+		const uint8_t * blues)
+{
+	// Debug: Support simple palettes 2, 4, 16 or 256 colors
+	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+		 bitsPerPixel == 4 || bitsPerPixel == 8,
+		"Unsupported palette size");
+
+	// 1,2 4 and 8 bit bitmasks. Note 3,5,6 don't make sense
+	// and 5bits is handled separately with uint16_t type.
+	const uint8_t andMask = (bitsPerPixel ==1) ? 0x01 :
+			(bitsPerPixel == 2) ? 0x03 :
+			(bitsPerPixel == 4) ? 0x0F :
+			(bitsPerPixel == 8) ? 0xFF :
+			0x00;
+
+ 	DISABLE_INTERRUPTS;
+
+	// Send each byte as 1 to 4 pixels
+	uint16_t offset;
+	offset = 0;
+	uint16_t index;
+	index = 0;
+	while (1) {
+		uint8_t elem; 
+		elem = pixelArray[offset++]; 
+		for (uint8_t j = 0; j < 8/bitsPerPixel; j++) {
+			if (index++ >= count) {
+				goto end;
+			}
+			const uint8_t colorIndex = elem & andMask;
+			T pixel;
+			pixel.r = reds[colorIndex];
+			pixel.g = greens[colorIndex];
+			pixel.b = blues[colorIndex];
+			// @note support w in future
+			sendPixels(1, &pixel);
+			elem >>= bitsPerPixel;
+		}
+	}
+end:
 	RESTORE_INTERRUPTS;
 }
 
