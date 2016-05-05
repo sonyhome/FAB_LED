@@ -88,9 +88,17 @@ myLEDtype<D,5> strip5;
 myLEDtype<D,6> strip6;
 myLEDtype<D,7> strip7;
 
-ws2812b8s<D,4,7> strip_split8;
-ws2812bs<D,6,D,7> strip_split2;
-ws2812bi<D,6,D,7> strip_intlv2;
+ws2812b8s<D,2,7> strip_split8;
+
+ws2812bs<D,0,D,1> strip_split2a;
+ws2812bs<D,2,D,3> strip_split2b;
+ws2812bs<D,4,D,5> strip_split2c;
+ws2812bs<D,6,D,7> strip_split2d;
+
+ws2812bi<D,0,D,1> strip_intlv2a;
+ws2812bi<D,2,D,3> strip_intlv2b;
+ws2812bi<D,4,D,5> strip_intlv2c;
+ws2812bi<D,6,D,7> strip_intlv2d;
 
 ////////////////////////////////////////////////////////////////////////////////
 // We define the pixel array we'll store the actual red, green, blue values in.
@@ -208,7 +216,7 @@ void setup()
 void loop()
 {
   const uint8_t iters = 16;
-  const uint8_t repeats = 8;
+  const uint8_t repeats = 16;
 
   // Default way a user would use.
   Serial.println("Update LED strips one after the other.");
@@ -248,10 +256,10 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_split2.sendPixels(numPixels, grbPixels);
-      strip_split2.sendPixels(numPixels, grbPixels);
-      strip_split2.sendPixels(numPixels, grbPixels);
-      strip_split2.sendPixels(numPixels, grbPixels);
+      strip_split2a.sendPixels(numPixels/4, grbPixels);
+      strip_split2b.sendPixels(numPixels/4, grbPixels);
+      strip_split2c.sendPixels(numPixels/4, grbPixels);
+      strip_split2d.sendPixels(numPixels/4, grbPixels);
     }
   }
   off(1000);
@@ -267,10 +275,10 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_intlv2.sendPixels(numPixels, grbPixels);
-      strip_intlv2.sendPixels(numPixels, grbPixels);
-      strip_intlv2.sendPixels(numPixels, grbPixels);
-      strip_intlv2.sendPixels(numPixels, grbPixels);
+      strip_intlv2a.sendPixels(numPixels/4, grbPixels);
+      strip_intlv2b.sendPixels(numPixels/4, grbPixels);
+      strip_intlv2c.sendPixels(numPixels/4, grbPixels);
+      strip_intlv2d.sendPixels(numPixels/4, grbPixels);
     }
   }
   off(1000);
@@ -282,7 +290,7 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      parallelPixel(D, 3*numPixels, (uint8_t*) grbPixels);
+      parallelPixel(D, 3*numPixels/8, (uint8_t*) grbPixels);
     }
   }
   off(1000);
@@ -302,7 +310,7 @@ void loop()
       const uint8_t * array = (uint8_t*) grbPixels;
       const uint8_t oldSREG = SREG;
       cli();
-      for(uint16_t j = 0; j < 3*numPixels; j++) {
+      for(uint16_t j = 0; j < 3*numPixels/8; j++) {
         strip0.sendBytes(1, &array[j]);
         strip1.sendBytes(1, &array[j]);
         strip2.sendBytes(1, &array[j]);
