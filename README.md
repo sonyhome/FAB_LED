@@ -506,6 +506,10 @@ Loial's first attempt at using the FAB_LED library, using sk6812 rgb LEDs.
 target="_blank"><img src="https://i.ytimg.com/vi_webp/BiE-9_EtXDg/mqdefault.webp"
 width="240" height="180" border="10" /></a>
 
+I received my sk6812 rgbww and it is pretty bright.
+It is very hard to find the notch for the pinout, so I made a diagram:
+
+![Sk6812ww pinout](Documentation/Sk6812rgbww.gif)  
 
 Soldering ws2812b + sk6812-rgbw
 -------------------------------

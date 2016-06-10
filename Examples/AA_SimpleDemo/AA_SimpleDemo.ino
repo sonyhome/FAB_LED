@@ -52,8 +52,8 @@
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs at
 /// once. Maybe no more than 8 at full power (max is 60mA at 5V is 0.3Watt/LED).
-const uint16_t numPixels = 8;
-const uint16_t maxBrightness = 16;
+const uint8_t numPixels = 2;
+const uint8_t maxBrightness = 16;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Declares the LED strip you'll write to. You can change this to the right
@@ -70,7 +70,7 @@ ws2812b<D,6> myLedStrip;
 // We define the pixel array we'll store the actual red, green, blue values in.
 // Note this library supports many pixel structures, and it is best to use the
 // structure that holds the colors in the same order as your LED strip model.
-grb  grbPixels[numPixels] = {};
+hbgr  pixels[numPixels] = {};
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -78,8 +78,17 @@ grb  grbPixels[numPixels] = {};
 ////////////////////////////////////////////////////////////////////////////////
 void setup()
 {
-  // Turn off up to 1000 LEDs.
-  myLedStrip.clear(1000);
+  // RGB initializes to zero, but for APA102, h initializes to full brightness
+  for (uint8_t pos = 0; pos < numPixels; pos++) {
+    pixels[pos].h = 0xFF;
+    pixels[pos].g = 0;
+    pixels[pos].b = 0;
+    pixels[pos].r = 0;    
+  }
+  // Clear display
+  myLedStrip.refresh(); // Hack: needed for apa102 to display last pixels
+  myLedStrip.sendPixels(numPixels,pixels);
+  myLedStrip.refresh(); // Hack: needed for apa102 to display last pixels
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -89,14 +98,14 @@ void setup()
 void loop()
 {
   // We pick ONE pixel and change its color.
-  const uint16_t pos = random(numPixels);
-  grbPixels[pos].r = random(maxBrightness);
-  grbPixels[pos].g = random(maxBrightness);
-  grbPixels[pos].b = random(maxBrightness);
+  const uint8_t pos = random(numPixels);
+  
+  pixels[pos].r = random(maxBrightness);
+  pixels[pos].g = random(maxBrightness);
+  pixels[pos].b = random(maxBrightness);
 
   // Display the pixels.
-  myLedStrip.sendPixels(numPixels,grbPixels);
-
-  // Wait to have display lit for a while
+  myLedStrip.sendPixels(numPixels, pixels);
+  myLedStrip.refresh(); // Hack: needed for apa102 to display last pixels
   delay(100);
 }
