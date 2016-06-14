@@ -27,6 +27,17 @@
 // so make the IDE compile at -O2 instead of -Os (size).
 #pragma GCC optimize ("-O2")
 
+// static_assert is a built-in C++ 11 assert that Arduino does not seem to support
+#ifndef static_assert
+#define STATIC_ASSERT4(COND,MSG,LIN) typedef char assert_##MSG##_##LIN[(!!(COND))*2-1]
+#define STATIC_ASSERT3(X,M,L) STATIC_ASSERT4(X, M, L)
+#define STATIC_ASSERT2(X,M,L) STATIC_ASSERT3(X,M,L)
+#define STATIC_ASSERT(X,M)    STATIC_ASSERT2(X,M,__LINE__)
+#else
+#define SA2TXT2(x) # x
+#define SA2TXT(x) SA2TXT2(x)
+#define STATIC_ASSERT(X,M) static_assert(X, SA2TXT(M))
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief typed pixel structures for every LED protocol supported.
@@ -1379,9 +1390,10 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 		const uint8_t * blues)
 {
 	// Debug: Support simple palettes 2, 4, 16 or 256 colors
-	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+
+	STATIC_ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
 		 bitsPerPixel == 4 || bitsPerPixel == 8,
-		"Unsupported palette size");
+		Unsupported_palette_size);
 
 	// 1,2 4 and 8 bit bitmasks. Note 3,5,6 don't make sense
 	// and 5bits is handled separately with uint16_t type.
@@ -1429,9 +1441,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 		const uint8_t * palette)
 {
 	// Debug: Support simple palettes 2, 4, 16 or 256 colors
-	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+	STATIC_ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
 		 bitsPerPixel == 4 || bitsPerPixel == 8,
-		"Unsupported palette size");
+		Unsupported_palette_size);
 
 	// 1,2 4 and 8 bit bitmasks. Note 3,5,6 don't make sense
 	// and 5bits is handled separately with uint16_t type.
@@ -1473,9 +1485,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 		const T * palette)
 {
 	// Debug: Support simple palettes 2, 4, 16 or 256 colors
-	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+	STATIC_ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
 		bitsPerPixel == 4 || bitsPerPixel == 8,
-		"Unsupported palette size");
+		Unsupported_palette_size);
 
 	// 1,2 4 and 8 bit bitmasks. Note 3,5,6 don't make sense
 	// and 5bits is handled separately with uint16_t type.
@@ -1538,9 +1550,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixelsRemap (
 		const pixelType * palette)
 {
 	// Support only palettes with 2, 4, 16 or 256 colors
-	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+	STATIC_ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
 		bitsPerPixel == 4 || bitsPerPixel == 8,
-		"Unsupported palette size");
+		Unsupported_palette_size);
 
 	const uint16_t size = (sizeof(pixelType) == 1) ? bytesPerPixel : 1;
 
@@ -1568,9 +1580,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixelsRemap (
 		const pixelType * palette)
 {
 	// Support only palettes with 2, 4, 16 or 256 colors
-	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+	STATIC_ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
 		bitsPerPixel == 4 || bitsPerPixel == 8,
-		"Unsupported palette size");
+		Unsupported_palette_size);
 
 	const uint16_t size = (sizeof(pixelType) == 1) ? bytesPerPixel : 1;
 
@@ -1601,7 +1613,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	uint8_t bytes[4];
 
 	// Debug: Support brightness 0..3
-	static_assert(brightness < 3, "Unsupported brightness level");
+	STATIC_ASSERT(brightness < 3, Unsupported_brightness_level);
 
  	DISABLE_INTERRUPTS;
 
