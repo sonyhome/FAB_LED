@@ -116,6 +116,14 @@ typedef struct {
 	union { uint8_t r; uint8_t red; };
 } hbgr;
 
+/// @brief This macro lists all the LED structure types suported by the API
+#define API_LIST        \
+	API_ENTRY(rgb)  \
+	API_ENTRY(grb)  \
+	API_ENTRY(bgr)  \
+	API_ENTRY(rgbw) \
+	API_ENTRY(grbw) \
+	API_ENTRY(hbgr)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Helper macro for palette index encoding into a char * array when
@@ -493,6 +501,7 @@ class avrBitbangLedStrip
 	static inline void
 	end(void) __attribute__ ((always_inline));
 
+
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Display the array of pixels at the current position in the
 	/// LED strip.
@@ -502,8 +511,192 @@ class avrBitbangLedStrip
 	private:
 	template <class pixelClassF>
 	static inline void
-	draw(const uint16_t count, const pixelClassF * array)
+	send(const uint16_t count, const pixelClassF * array)
 	__attribute__ ((always_inline));
+
+	template <class pixelClassF>
+	static inline void
+	send(const uint16_t count, const pixelClassF * palette, const uint8_t * array)
+	__attribute__ ((always_inline));
+
+	template <const uint8_t bitsPerPixel, class arrayClassF, class paletteClassF, class mapIntF>
+	static inline void
+	send(const uint16_t count, const arrayClassF * array, const paletteClassF * palette, const mapIntF * map = NULL)
+	__attribute__ ((always_inline));
+
+
+	public:
+	////////////////////////////////////////////////////////////////////////
+	/// @brief
+	/// send(uint16_t count, pixelType * array);
+	/// send(uint16_t count, uint16_t * array, brightness);
+	///
+	/// Display the array of pixels at the current position in the LED strip
+	///
+	/// @param[in] count  Number of pixels to send
+	/// @param[in] array  Pixel array of 16bit/pixel {r:5, g:6, b:5}
+	/// @param[in] brightness (optional) value 0..7 increases LED power
+	///
+	/// @note
+	/// uint16_t array (assume r:5,g:6,b:5)
+	/// uint8_t array (assume bytes are in native LED strip format)
+	/// For 32bit, assume hbgr. The first byte must be > 0xE0 if the strip
+	/// is APA-102!
+	////////////////////////////////////////////////////////////////////////
+	static inline void
+	send(const uint16_t count, const uint16_t * array, const uint8_t brightness=1)
+	__attribute__ ((always_inline));
+
+	static inline void send(const uint16_t count, const uint8_t * array) {
+		send<pixelClass>(count/stripBPP, (pixelClass *) array);
+	} __attribute__ ((always_inline));
+
+	static inline void send(const uint16_t count, const uint32_t * array) {
+		send<hbgr>(count, (hbgr *) array);
+	} __attribute__ ((always_inline));
+
+	// Handle all pixel types: The API function is a wrapper around the template
+	// send<type>, which specifies explicitly which pixel type is allowed. The
+	// template function called will automatically translate to a native call
+	// if the input type matches the LED strip type, else it will convert it.
+#define API_ENTRY(entryPixelType) \
+	static inline void send(const uint16_t count, const entryPixelType * array) { \
+		send<entryPixelType>(count, array); } __attribute__ ((always_inline));
+	API_LIST;
+#undef API_ENTRY
+
+
+	////////////////////////////////////////////////////////////////////////
+	/// @brief
+	/// send(uint16_t count, pixelType * array, uint8_t * map);
+	/// send(uint16_t count, pixelType * array, uint16_t * map);
+	/// send(uint16_t count, uint16_t * array, uint8_t * map, brightness);
+	/// send(uint16_t count, uint16_t * array, uint16_t * map, brightness);
+	///
+	/// Remapping:
+	/// Display the array of pixels at the current position in the LED strip
+	/// The pixels are remapped. The map[] tells the offset in the array[]
+	/// to read the color from. map[] entries correspond to the physical LED
+	/// position in the strip. The array[] entries correspond to the logical
+	/// pixels in the picture.
+	///
+	/// @param[in] count  Number of pixels to send
+	/// @param[in] array  Pixel array of 16bit/pixel {r:5, g:6, b:5}
+	/// @param[in] map    Array to remap pixels,
+	/// @param[in] brightness (optional) value 0..7 increases LED power
+	////////////////////////////////////////////////////////////////////////
+
+	// 8bit map
+//	static inline void
+//	send(const uint16_t count, const uint16_t * array, uint8_t * map, const uint8_t brightness = 1)
+//	__attribute__ ((always_inline));
+	static inline void send(const uint16_t count, const uint8_t * array, uint8_t * map) {
+		send<0,pixelClass,pixelClass,uint8_t>(count/stripBPP, (pixelClass *) array, NULL, map);
+	} __attribute__ ((always_inline));
+	static inline void send(const uint16_t count, const uint32_t * array, uint8_t * map) {
+		send<0,hbgr,hbgr,uint8_t>(count, (hbgr *) array, NULL, map);
+	} __attribute__ ((always_inline));
+#define API_ENTRY(entryPixelType) \
+	static inline void send(const uint16_t count, const entryPixelType * array, uint8_t * map) { \
+		send<255, entryPixelType, entryPixelType, uint8_t>(count, array, NULL, map); \
+	} __attribute__ ((always_inline));
+	API_LIST
+
+	// 16bit map
+//	static inline void
+//	send(const uint16_t count, const uint16_t * array, uint16_t * map, const uint8_t brightness = 1)
+//	__attribute__ ((always_inline));
+	static inline void send(const uint16_t count, const uint8_t * array, uint16_t * map) {
+		send<0,pixelClass,pixelClass,uint16_t>(count/stripBPP, (pixelClass *) array, NULL, map);
+	} __attribute__ ((always_inline));
+	static inline void send(const uint16_t count, const uint32_t * array, uint16_t * map) {
+		send<0,hbgr,hbgr,uint16_t>(count, (hbgr *) array, NULL, map);
+	} __attribute__ ((always_inline));
+#define API_ENTRY(entryPixelType) \
+	static inline void send(const uint16_t count, const entryPixelType * array, uint16_t * map) { \
+		send<0,entryPixelType,entryPixelType,uint16_t>(count, array, NULL, map); \
+	} __attribute__ ((always_inline));
+	API_LIST
+#undef API_ENTRY
+
+	////////////////////////////////////////////////////////////////////////
+	/// @brief
+	/// send<N>(uint16_t count, uint8_t array, pixelType * palette, uint8_t map);
+	/// send<N>(uint16_t count, uint16_t array, pixelType * palette, uint16_t map);
+	/// send<N>(uint16_t count, uint8_t array, uint16_t * palette, uint8_t map, bright);
+	/// send<N>(uint16_t count, uint16_t array, uint16_t * palette, uint16_t map, bright);
+	///
+	/// Palette:
+	/// Display the array of pixels at the current position in the LED strip
+	/// The pixels use a color palette. The array[] holds N-bits for each
+	/// pixel, the value represents a color index in the palette table.
+	/// The 
+	/// to read the color from. map[] entries correspond to the physical LED
+	/// position in the strip. The array[] entries correspond to the logical
+	/// pixels in the picture.
+	///
+	/// @param[in] N      Template parameter, number of bits per pixel.
+	///                   Valid values: 1, 2, 4 or 8 bits per pixel.
+	/// @param[in] count  Number of pixels to send
+	/// @param[in] array  Pixel array of N bits per pixel
+	/// @param[in] map    (optional) Remapping. map[LEDindex] = pixelOffset
+	/// @param[in] bright (optional) value 0..7 increases LED power
+	////////////////////////////////////////////////////////////////////////
+
+
+//	template <const uint8_t bitsPerPixel>
+//	static inline void send(const uint16_t count, const uint8_t * array, uint16_t * palette, uint8_t map = NULL, const uint8_t brightness = 1);
+	template <const uint8_t bitsPerPixel>
+	static inline void send(const uint16_t count, const uint8_t * array, uint8_t * palette, uint8_t map = NULL) {
+		send<bitsPerPixel,uint8_t,pixelClass,uint8_t>(count/stripBPP, array, (pixelClass *) palette, map);
+	} __attribute__ ((always_inline));
+	template <const uint8_t bitsPerPixel>
+	static inline void send(const uint16_t count, const uint8_t * array, uint32_t * palette, uint8_t map = NULL) {
+		send<bitsPerPixel,uint8_t,hbgr,uint8_t>(count, array, (hbgr *) palette, map);
+	} __attribute__ ((always_inline));
+#define API_ENTRY(entryPixelType) \
+	template <const uint8_t bitsPerPixel> \
+	static inline void send(const uint16_t count, const uint8_t * array, const entryPixelType * palette, uint8_t map = NULL) { \
+		send<bitsPerPixel, uint8_t, entryPixelType, uint8_t>(count, array, palette, map); \
+	} __attribute__ ((always_inline));
+	API_LIST
+#undef API_ENTRY
+
+//	template <const uint8_t bitsPerPixel>
+//	static inline void send(const uint16_t count, const uint16_t * array, uint16_t * palette, uint16_t map = NULL, const uint8_t brightness = 1);
+	template <const uint8_t bitsPerPixel>
+	static inline void send(const uint16_t count, const uint16_t * array, uint8_t * palette, uint16_t map = NULL) {
+		send<bitsPerPixel,uint16_t,pixelClass,uint16_t>(count/stripBPP, array, (pixelClass *) palette, map);
+	} __attribute__ ((always_inline));
+	template <const uint8_t bitsPerPixel>
+	static inline void send(const uint16_t count, const uint16_t * array, uint32_t * palette, uint16_t map = NULL) {
+		send<bitsPerPixel,uint16_t,hbgr,uint16_t>(count, array, (hbgr *) palette, map);
+	} __attribute__ ((always_inline));
+#define API_ENTRY(entryPixelType) \
+	template <const uint8_t bitsPerPixel> \
+	static inline void send(const uint16_t count, const uint16_t * array, const entryPixelType * palette, uint16_t map = NULL) { \
+		send<bitsPerPixel, uint16_t, entryPixelType, uint16_t>(count, array, palette, map); \
+	} __attribute__ ((always_inline));
+	API_LIST
+#undef API_ENTRY
+
+
+
+
+	////////////////////////////////////////////////////////////////////////
+	/// @brief Display the array of pixels at the current position in the
+	/// LED strip.
+	/// @param[in] count  Number of pixels to send
+	/// @param[in] array  Pixel array of size equal or greater than count.
+	////////////////////////////////////////////////////////////////////////
+	private:
+	template <class pixelClassF>
+	static inline void
+	draw(const uint16_t count, const pixelClassF * array) {
+		begin();
+		send(count, array);
+		end();
+	} __attribute__ ((always_inline));
 
 	public:
 	////////////////////////////////////////////////////////////////////////
@@ -537,147 +730,6 @@ class avrBitbangLedStrip
 		draw<grbw>(count, array); } __attribute__ ((always_inline));
 	static inline void draw(const uint16_t count, const hbgr * array) {
 		draw<hbgr>(count, array); } __attribute__ ((always_inline));
-
-/********************************************************************************************************************
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Trigger a LED strip reset to refresh the display
-	////////////////////////////////////////////////////////////////////////
-	static inline void refresh(void) __attribute__ ((always_inline));
-
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Sends an array of 32bit words encoding 0x00bbrrgg to the LEDs
-	/// This is the standard encoding for most libraries and wastes 25% of
-	/// the SRAM.
-	///
-	/// @param[in] numPixels Number of pixels to write
-	/// @param[in] array     Array of 1 word per pixels in native order
-	///                      (most significant byte is ignored)
-	////////////////////////////////////////////////////////////////////////
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const uint32_t * pixelArray)
-	__attribute__ ((always_inline));
-
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Sends 3-byte pixels to the LED strip.
-	/// This function should be the most common used method.
-	///
-	/// @note for SK6812, which uses 4 bytes per pixels, this method will send
-	/// 4 bytes per pixel and expect an array containing 4 bytes per pixel.
-	/// @param[in] numPixels Number of pixels to write
-	/// @param[in] array     Array of 3-bytes per pixels in native order
-	///                      (for example GBR for WS2812B LED strips)
-	////////////////////////////////////////////////////////////////////////
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const uint8_t * array) __attribute__ ((always_inline));
-
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const rgbw * array) __attribute__ ((always_inline));
-
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const grbw * array) __attribute__ ((always_inline));
-
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const hbgr * array) __attribute__ ((always_inline));
-
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const rgb * array) __attribute__ ((always_inline));
-
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const grb * array) __attribute__ ((always_inline));
-
-	static inline void sendPixels(
-			const uint16_t numPixels,
-			const bgr * array) __attribute__ ((always_inline));
-
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Sends an array of bits encoded with a palette to the LEDs.
-	/// This is a compact method to store patterns, compressed 3x to 24x,
-	/// but with the overhead of a palette array.
-	///
-	/// @param[in] count   Size of the array in bytes
-	/// @param[in] array   Array of bitsPerPixel bits per pixels, where the
-	///                    number of bits is 1,2, 4 or 8.
-	/// @param[in] palette Palette array with one entry per color used.
-	///
-	/// 1bit  ->   6B palette
-	/// 2bits ->  12B palette
-	/// 4bits ->  48B palette
-	/// 8bits -> 768B palette
-	///
-	/// @note bitsPerPixel is a template constant to allow the compiler to
-	/// optimize the bit-masking code.
-	////////////////////////////////////////////////////////////////////////
-	template <const uint8_t bitsPerPixel, class pixelColors> // @note does not support uint32_t uint8_t.
-	static inline void sendPixels (
-			const uint16_t count,
-			const uint8_t * pixelArray,
-			const uint8_t * reds,
-			const uint8_t * greens,
-			const uint8_t * blues) __attribute__ ((always_inline));
-
-	template <const uint8_t bitsPerPixel>
-	static inline void sendPixels (
-			const uint16_t count,
-			const uint8_t * pixelArray,
-			const uint8_t * palette) __attribute__ ((always_inline));
-
-	template <const uint8_t bitsPerPixel, class paletteColors>
-	static inline void sendPixels (
-			const uint16_t count,
-			const uint8_t * pixelArray,
-			const paletteColors * palette) __attribute__ ((always_inline));
-
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Send an array that is remapped to a physical LED strip
-	/// of a different layout than the natural layout of the pixel array
-	/// @param[in] pixelMap An array mapping a physical pixel to an offset
-	///            in the array pixelMap[pix] = index
-	/// Note: the array size is not used as it is expected that it will be
-	/// at least as big as the largest index in the pixel map.
-	////////////////////////////////////////////////////////////////////////
-	template <class pixelType> 
-	static inline void sendPixelsRemap(
-			const uint16_t numPixels,
-			const uint16_t * pixelMap,
-			const pixelType * array) __attribute__ ((always_inline));
-
-	template <const uint8_t bitsPerPixel, class pixelType>
-	static inline void sendPixelsRemap (
-			const uint16_t numPixels,
-			const uint16_t * pixelMap,
-			const uint8_t * pixelArray,
-			const pixelType * palette) __attribute__ ((always_inline));
-
-	template <const uint8_t bitsPerPixel, class pixelType>
-	static inline void sendPixelsRemap (
-			const uint8_t numPixels,
-			const uint8_t * pixelMap,
-			const uint8_t * pixelArray,
-			const pixelType * palette) __attribute__ ((always_inline));
-
-
-	////////////////////////////////////////////////////////////////////////
-	/// @brief Sends an array of 3 pixels per 16bit words to the LEDs
-	/// This yelds 32K colors, and saves 33% RAM without using a palette. 
-	/// 
-	/// the SRAM.
-	/// @brief Sends an array of 16-bit words to the LEDs. Each word encodes
-	/// one pixel with 64 levels (5 bits)
-	//
-	/// @note brightness is a template constant that controls the unused 3
-	/// bits of the color. Its value is from zero to 2. Often set to 0 when
-	/// LED strip is too bright.
-	////////////////////////////////////////////////////////////////////////
-	template <uint8_t brightness>
-	static inline void sendPixels(int count, uint16_t * pixelArray) __attribute__ ((always_inline));
-********************************************************************************************************************/
 };
 
 
@@ -1249,12 +1301,12 @@ avrBitbangLedStrip<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value
 	if (stripBPP == 3) {
 		const uint8_t array[3] = {value, value, value};
 		for(uint16_t i = 0; i < numPixels; i++) {
-			draw(stripBPP, array);
+			send(stripBPP, array);
 		}
 	} else if (stripBPP == 4) {
 		const uint8_t array[4] = {value, value, value, value};
 		for(uint16_t i = 0; i < numPixels; i++) {
-			draw(stripBPP, array);
+			send(stripBPP, array);
 		}
 	}
 	end();
@@ -1298,7 +1350,7 @@ avrBitbangLedStrip<FAB_TVAR>::end(void)
 template<FAB_TDEF>
 template <class pixelClassF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::draw(
+avrBitbangLedStrip<FAB_TVAR>::send(
 		const uint16_t numPixels,
 		const pixelClassF * array)
 {
@@ -1337,7 +1389,7 @@ avrBitbangLedStrip<FAB_TVAR>::draw(
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::draw(
+avrBitbangLedStrip<FAB_TVAR>::send(
 		const uint16_t numPixels,
 		const uint16_t * array,
 		const uint8_t brightness)
@@ -1362,6 +1414,44 @@ avrBitbangLedStrip<FAB_TVAR>::draw(
 	}
 }
 
+
+// The remap is optional. When it is used the remap array represents the physical
+// LEDs of the LED strip, and holds the index in array[] of the color.
+template<FAB_TDEF>
+template <const uint8_t bitsPerPixel, class arrayClassF, class paletteClassF, class mapIntF>
+inline void
+avrBitbangLedStrip<FAB_TVAR>::send (
+		const uint16_t count,
+		const arrayClassF * array,   // uint8_t if palette, else pixelClassF
+		const paletteClassF * palette, // any custom pixelClassF, but not uint8_t
+		const mapIntF * map)         // use uint8_t for <256 pixels, else uint16_t
+{
+	// Support only palettes with 2, 4, 16 or 256 colors
+	STATIC_ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+		bitsPerPixel == 4 || bitsPerPixel == 8,
+		Unsupported_bits_per_pixel_palette);
+
+	// paletteClassF must be a custom type so the size is known, not uint8_t.
+	const uint8_t pixelSize = sizeof(paletteClassF);
+	const mapIntF iMax = (const mapIntF) count;
+
+	for (mapIntF i = 0; i < iMax; i++) {
+		// Remapped index in array is index of the next pixel to push.
+		// Pixels are pushed in order of the LED strip.
+		const mapIntF ri = (map != NULL) ? map[i] : i;
+
+		// Extract the N-bit color index via bitmasks
+		if (palette != NULL) {
+			const uint8_t ci = GET_PIXEL(array, ri, bitsPerPixel);
+		}
+
+		// Get the color/pixel to send. Without palette, the array is the pixel
+		const paletteClassF * pixel =  (palette != NULL) ? &palette[i] : &array[ri];
+
+		// Draw pixel by pixel
+		send(1, pixel);
+	}
+}
 
 
 
