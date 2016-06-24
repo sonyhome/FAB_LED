@@ -49,67 +49,68 @@
 
 #include <FAB_LED.h>
 
-/// @brief This parameter says how many LEDs will be lit up in your strip.
-const uint8_t numPixels = 2;
+/// This parameter says how many LEDs will be lit up in your strip.
+const uint8_t numPixels = 16;
 
-/// @brief This says how bright LEDs will be (max is 255)
-const uint8_t maxBrightness = 16;
+/// This says how bright LEDs will be (max is 255)
+const uint8_t maxBrightness = 20;
 
-/// @brief Declare the protocol for your LED strip. Data is wired to port D6,
-/// and the clock to port D5, for APA102 only.
-ws2812b<D,6>  LEDstrip;
-//ws2812<D,6>  LEDstrip;
-//sk6812<D,6>   LEDstrip;
-//sk6812b<D,6>  LEDstrip;
-//apa104<D,6>   LEDstrip;
-//apa106<D,6>   LEDstrip;
-//apa102<D,6,D,5>  LEDstrip;
+/// This class declare the protocol of your LED strip and which port it is on.
+// Data output is sent to port D6 (pin 6 on Uno), and for APA102 LEDs, the clock
+// is sent to port D5. Uncomment the LED strip that matches the model ou own.
+//ws2812b<D,6>  strip;
+//ws2812<D,6>   strip;
+//sk6812<D,6>   strip;
+//sk6812b<D,6>  strip;
+//apa104<D,6>   strip;
+//apa106<D,6>   strip;
+apa102<D,6,D,5>  strip;
 
-/// @brief Array holding the pixel data.
+/// Array holding the pixel data.
 /// Note you have multiple formats available, to support any LED type. If you
-/// use the wrong type, FAB_LED will do the conversion transparently for you.
-hbgr  pixels[numPixels] = {};
-//grb  pixels[numPixels] = {};
-//grbw  pixels[numPixels] = {};
+/// use the wrong type, FAB_LED will do the conversion transparently for you,
+/// but the code will be a tiny bit bigger and slower.
+//uint32_t  pixels[numPixels] = {};
+//grb  pixels[numPixels] = {}; // Native type for ws2812
+//grbw  pixels[numPixels] = {}; // Native type for sk6812
+hbgr  pixels[numPixels] = {}; // Native type for apa102
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief This method is automatically called once when the board boots.
+/// Setup() is automatically called once when the board boots.
 ////////////////////////////////////////////////////////////////////////////////
 void setup()
 {
-  // RGB initializes to zero, but for APA102, h is set to full brightness.
-  // Depending on which class you use for your pixels, comment the h or w field
-  // accordingly.
-  for (uint8_t pos = 0; pos < numPixels; pos++) {
-    pixels[pos].h = 0xFF; // hgrb has h field
-    pixels[pos].g = 0;
-    pixels[pos].b = 0;
-    pixels[pos].r = 0;
-    //pixels[pos].w = 0; // grbw has w field
+  // All fields for a pixel initialize to zero, except field h for APA-102
+  // which must be 0xE0 or greater, so we set it to 0xFF, full brightness.
+  // Depending on which pixel class you uncomment above, comment the h or w
+  // field below accordingly, or the code won't compile.
+  for (uint8_t index = 0; index < numPixels; index++) {
+    pixels[index].h = 0xFF; // hgrb has h field
+    pixels[index].g = 0;
+    pixels[index].b = 0;
+    pixels[index].r = 0;
+    //pixels[index].w = 0; // grbw has w field
   }
 
-  LEDstrip.refresh(); // Hack: needed for apa102 to display last pixels
-
-  // Clear display
-  LEDstrip.sendPixels(numPixels,pixels);
-  LEDstrip.refresh(); // Hack: needed for apa102 to display last pixels
+  // Let's just erase 1K pixels to really clear the LED strip of rogue data
+  strip.clear(1000);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief This method is automatically called repeatedly after setup() has run.
+/// On Arduino, loop() is automatically called repeatedly after setup() has run.
 /// It is the main loop.
 ////////////////////////////////////////////////////////////////////////////////
 void loop()
 {
-  // We pick ONE pixel and change its color.
-  const uint8_t pos = random(numPixels);
-  pixels[pos].r = random(maxBrightness);
-  pixels[pos].g = random(maxBrightness);
-  pixels[pos].b = random(maxBrightness);
+  // We pick ONE pixel and change its color to whatever.
+  const uint8_t index = random(numPixels);
+  pixels[index].r = random(maxBrightness);
+  pixels[index].g = random(maxBrightness);
+  pixels[index].b = random(maxBrightness);
 
   // Display the pixels on the LED strip.
-  LEDstrip.sendPixels(numPixels, pixels);
-  LEDstrip.refresh(); // Hack: needed for apa102 to display last pixels
+  strip.draw(numPixels, pixels);
+
   delay(100);
 }

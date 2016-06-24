@@ -31,7 +31,8 @@
 /// @brief By default the test drives a WS2812B LED strip on port D6 (pin 6 on
 /// Arduino uno). Change the model and ports here to match your configuration.
 ////////////////////////////////////////////////////////////////////////////////
-ws2812b<D,6> myLeds;
+//ws2812b<D,6> myLeds;
+apa102<D,6,D,5> myLeds;
 //apa104<D,6> myLeds;
 //apa106<D,6> myLeds;
 //sk6812<D,6> myLeds;
@@ -41,7 +42,7 @@ ws2812b<D,6> myLeds;
 /// If you power the LED strip through your Arduino USB power supply, and not
 /// through a separate power supply, make sure to not turn on too many LEDs.
 ////////////////////////////////////////////////////////////////////////////////
-const uint16_t numPixels = 8;
+const uint16_t numPixels = 16;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Methods defined in order to use the debug() call, which will display
@@ -147,18 +148,12 @@ void colorN(uint8_t red, uint8_t green, uint8_t blue)
 	Serial.print(blue);
 	Serial.println(")");
 
-	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3*numPixels] = {};
-
-	// We cast "array" to "pix" so we can write the colors using
-	// the grb structure. It's easier to read.
-	grb * pix = (grb *) array;
-
+	grb array[numPixels] = {};
 	// Set each set of 3 bytes for every pixel
 	for (uint8_t i = 0; i < numPixels; i++) {
-		pix[i].r = red;
-		pix[i].g = green;
-		pix[i].b = blue;
+		array[i].r = red;
+		array[i].g = green;
+		array[i].b = blue;
 	}
 
 	// Prints the memory used to sore pixels on the console.
@@ -166,13 +161,12 @@ void colorN(uint8_t red, uint8_t green, uint8_t blue)
 	Serial.println(sizeof(array));
 
 	// Display the LEDs
-	myLeds.sendPixels(numPixels, array);
+	myLeds.draw(numPixels, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Display one pixel with one solid color for 1 second.
-/// We use a 3 byte array storing one pixel.
-/// Each value can be from 0 to 255.
+/// @brief Display one pixel at a chosen position in the LED strip, with one
+/// solid color for 1 second.
 ////////////////////////////////////////////////////////////////////////////////
 void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 {
@@ -187,25 +181,20 @@ void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 	Serial.print(blue);
 	Serial.println(")");
 
-	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t dim = pos+1;
-	uint8_t array[3*dim];
-	memset(array,0,sizeof(array));
-
-	// We cast "array" to "pix" so we can write the colors using
-	// the grb structure. It's easier to read.
-	grb * pix = (grb *) array;
-
-	pix[pos].r = red;
-	pix[pos].g = green;
-	pix[pos].b = blue;
+	grb array[dim];
+ 
+  memset(array,0,sizeof(array));
+	array[pos].r = red;
+	array[pos].g = green;
+	array[pos].b = blue;
 
 	// Prints the memory used to sore pixels on the console.
 	Serial.print("Pixels array size=");
 	Serial.println(sizeof(array));
 
 	// Display the LEDs
-	myLeds.sendPixels(dim, array);
+	myLeds.draw(dim, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -228,31 +217,22 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 	Serial.println(")");
 
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3] = {};
+	grb pixel = {};
 
-	// We cast "array" to "pix" so we can write the colors using
-	// the grb structure. It's easier to read.
-	grb * pix = (grb *) array;
-
-	pix[0].r = red;
-	pix[0].g = green;
-	pix[0].b = blue;
+	pixel.r = red;
+	pixel.g = green;
+	pixel.b = blue;
 
 	// Prints the memory used to sore pixels on the console.
 	Serial.print("Pixels array size=");
-	Serial.println(sizeof(array));
+	Serial.println(sizeof(pixel));
 
-	// Disable interupts, save the old interupt state
-	const uint8_t oldSREG = SREG;
- 	cli();
-
-	// Display the LEDs
+  // Display the LEDs
+	myLeds.begin();
 	for (uint8_t i = 0; i < numPixels; i++) {
-		myLeds.sendPixels(1, array);
+		myLeds.draw(1, &pixel);
 	}
-
-	// Restore the old interrupt state
-	SREG = oldSREG;
+  myLeds.end();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -289,20 +269,19 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 	Serial.println(")");
 
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3*numPixels] = {};
-	grb * pix = (grb *) array;
+	grb array[3*numPixels] = {};
 
 	// Initialize the colors on the array
-	pix[0].r = brightness;
-	pix[0].g = 0;
-	pix[0].b = 0;
+	array[0].r = brightness;
+	array[0].g = 0;
+	array[0].b = 0;
 	for (uint8_t i = 1; i < numPixels; i++) {
 		// Set pix to previous pix color
-		pix[i].r = pix[i-1].r;
-		pix[i].g = pix[i-1].g;
-		pix[i].b = pix[i-1].b;
+		array[i].r = array[i-1].r;
+		array[i].g = array[i-1].g;
+		array[i].b = array[i-1].b;
 		// Then change the color
-		colorWheel(incLevel, pix[i].r, pix[i].g, pix[i].b);
+		colorWheel(incLevel, array[i].r, array[i].g, array[i].b);
 	}
 
 	// Prints the memory used to sore pixels on the console.
@@ -311,12 +290,12 @@ void rainbow(uint8_t brightness, uint8_t incLevel)
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
-		myLeds.sendPixels(numPixels, array);
+		myLeds.draw(numPixels, array);
 		delay(100);
 
 		// Rotate the colors based on the pixel's previous color.
 		for (uint16_t i = 0; i < numPixels ; i++) {
-			colorWheel(incLevel, pix[i].r, pix[i].g, pix[i].b);
+			colorWheel(incLevel, array[i].r, array[i].g, array[i].b);
 		}
 	}
 }
@@ -336,14 +315,12 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 	Serial.print(brightness);
 	Serial.println(")");
 
-	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3] = {};
-	grb * pix = (grb *) array;
+	grb array[1] = {};
 
 	// Initialize the colors on the array
-	pix[0].r = brightness;
-	pix[0].g = 0;
-	pix[0].b = 0;
+	array[0].r = brightness;
+	array[0].g = 0;
+	array[0].b = 0;
 
 	// Prints the memory used to sore pixels on the console.
 	Serial.print("Pixels array size=");
@@ -351,16 +328,14 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
-		const uint8_t oldSREG = SREG;
- 		cli();
+		myLeds.begin();
 		for (uint16_t i = 0; i < numPixels ; i++) {
-			myLeds.sendPixels(1, array);
+			myLeds.send(1, array);
 		}
-		SREG = oldSREG;
-		delay(100);
+		myLeds.end();
 
 		// Rotate the colors based on the pixel's previous color.
-		colorWheel(incLevel, pix[0].r, pix[0].g, pix[0].b);
+		colorWheel(incLevel, array[0].r, array[0].g, array[0].b);
 	}
 }
 
@@ -379,40 +354,38 @@ void jitter()
 	const uint8_t arrayDim = numPixels/2 + maxJitter+1;
 
 	// A pixel is 3 bytes
-	uint8_t array[3*arrayDim] = {};
-	grb * pix = (grb *) array;
+	grb array[3*arrayDim] = {};
 
 	// Set each set of 3 bytes for every pixel
 	for (uint8_t i = 0; i < arrayDim; i++) {
 		if (i % 2 == 0) {
-			pix[i].r = 8;
+			array[i].r = 8;
 		}
 		if (i % 3 == 0) {
-			pix[i].g = 8;
+			array[i].g = 8;
 		}
 		if (i % 5 == 0) {
-			pix[i].b = 8;
+			array[i].b = 8;
 		}
 	}
 	// Mark one bright red pixel marker to show how LEDs are displayed
-	pix[maxJitter].g = 0;
-	pix[maxJitter].b = 0;
-	pix[maxJitter].r = 64;
+	array[maxJitter].g = 0;
+	array[maxJitter].b = 0;
+	array[maxJitter].r = 64;
 
 	Serial.print("array size=");
 	Serial.println(sizeof(array));
 
 	for (uint8_t t = 0; t < 10; t++) {
 		for (uint8_t i = 0; i <= maxJitter; i++) {
-			const uint8_t * displayPt = &array[3*i];
+			const grb * displayPt = &array[3*i];
 
-			const uint8_t oldSREG = SREG;
-			cli();
  			// Display same pattern twice, separated by a fixed pixel.
-			myLeds.sendPixels(numPixels/2, displayPt);
-			myLeds.sendPixels(1, &array[3*maxJitter]);
-			myLeds.sendPixels(numPixels/2-1, displayPt);
-			SREG = oldSREG;
+			myLeds.begin();
+			myLeds.send(numPixels/2, displayPt);
+			myLeds.send(1, &array[3*maxJitter]);
+			myLeds.send(numPixels/2-1, displayPt);
+			myLeds.end();
 
 			delay(300);
 		}

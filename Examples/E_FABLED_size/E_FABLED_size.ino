@@ -39,6 +39,6 @@ void loop()
 
   myLeds.clear(1000);
   delay(1000);
-  myLeds.sendPixels(8, pix);
+  myLeds.draw(8, pix);
   delay(1000);
 }

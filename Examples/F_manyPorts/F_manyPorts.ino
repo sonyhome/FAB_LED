@@ -223,14 +223,14 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip0.sendPixels(numPixels/8, grbPixels);
-      strip1.sendPixels(numPixels/8, &grbPixels[numPixels/8]);
-      strip2.sendPixels(numPixels/8, &grbPixels[2*numPixels/8]);
-      strip3.sendPixels(numPixels/8, &grbPixels[3*numPixels/8]);
-      strip4.sendPixels(numPixels/8, &grbPixels[4*numPixels/8]);
-      strip5.sendPixels(numPixels/8, &grbPixels[5*numPixels/8]);
-      strip6.sendPixels(numPixels/8, &grbPixels[6*numPixels/8]);
-      strip7.sendPixels(numPixels/8, &grbPixels[7*numPixels/8]);
+      strip0.draw(numPixels/8, grbPixels);
+      strip1.draw(numPixels/8, &grbPixels[numPixels/8]);
+      strip2.draw(numPixels/8, &grbPixels[2*numPixels/8]);
+      strip3.draw(numPixels/8, &grbPixels[3*numPixels/8]);
+      strip4.draw(numPixels/8, &grbPixels[4*numPixels/8]);
+      strip5.draw(numPixels/8, &grbPixels[5*numPixels/8]);
+      strip6.draw(numPixels/8, &grbPixels[6*numPixels/8]);
+      strip7.draw(numPixels/8, &grbPixels[7*numPixels/8]);
     }
   }
   off(1000);
@@ -241,7 +241,7 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_split8.sendPixels(numPixels, grbPixels);
+      strip_split8.draw(numPixels, grbPixels);
     }
   }
   off(1000);
@@ -256,10 +256,10 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_split2a.sendPixels(numPixels/4, grbPixels);
-      strip_split2b.sendPixels(numPixels/4, grbPixels);
-      strip_split2c.sendPixels(numPixels/4, grbPixels);
-      strip_split2d.sendPixels(numPixels/4, grbPixels);
+      strip_split2a.draw(numPixels/4, grbPixels);
+      strip_split2b.draw(numPixels/4, grbPixels);
+      strip_split2c.draw(numPixels/4, grbPixels);
+      strip_split2d.draw(numPixels/4, grbPixels);
     }
   }
   off(1000);
@@ -275,10 +275,10 @@ void loop()
   for(uint8_t n = 0; n < iters; n++) {
     off(numPixels);
     for(uint8_t i = 0; i < repeats; i++) {
-      strip_intlv2a.sendPixels(numPixels/4, grbPixels);
-      strip_intlv2b.sendPixels(numPixels/4, grbPixels);
-      strip_intlv2c.sendPixels(numPixels/4, grbPixels);
-      strip_intlv2d.sendPixels(numPixels/4, grbPixels);
+      strip_intlv2a.draw(numPixels/4, grbPixels);
+      strip_intlv2b.draw(numPixels/4, grbPixels);
+      strip_intlv2c.draw(numPixels/4, grbPixels);
+      strip_intlv2d.draw(numPixels/4, grbPixels);
     }
   }
   off(1000);

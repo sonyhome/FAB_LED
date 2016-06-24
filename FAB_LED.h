@@ -511,10 +511,14 @@ class avrBitbangLedStrip
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Ends a write sequence to the LED strip for send
+	/// @param[in] count  Total number of pixels that were sent. In rare
+	///                   cases, the user may send pixels to a port using 2
+	///                   or more protocols. In that case the count can't
+	///                   be tracked and the user must provide it.
 	/// @note: Call end() as soon as possible after begin()
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	end(void) __attribute__ ((always_inline));
+	end(uint16_t count = 0) __attribute__ ((always_inline));
 
 
 	////////////////////////////////////////////////////////////////////////
@@ -1401,9 +1405,13 @@ avrBitbangLedStrip<FAB_TVAR>::begin(void)
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::end(void)
+avrBitbangLedStrip<FAB_TVAR>::end(uint16_t count)
 {
 	if (protocol == SPI_BITBANG) {
+		// User overrides number of pixels tracked (rare)
+		if (count) {
+			pixelsDisplayed = count;
+		}
 		// Send end frame equal to 1/2 bit per pixel sent.
 		spiSoftwareSendFrame((++pixelsDisplayed)/2, true);
 		pixelsDisplayed = 0;

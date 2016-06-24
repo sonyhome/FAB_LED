@@ -40,14 +40,24 @@ const uint16_t numPixels = 16;
 /// want to use port D2 instead of D6.
 /// For different LED strip models you may want to match them to APA104 or WS2812
 /// LED timings by using the matching implementation class, for example:
+#if 1
 //ws2812<D,6> myLeds;
 //apa104<D,6> myLeds;
 //apa106<D,6> myLeds;
 ws2812b<D,6> myLeds;
-
-#define   RED(x, i) x[i]
-#define GREEN(x, i) x[i+1]
-#define  BLUE(x, i) x[i+2]
+#define PSIZE 3
+#define BRIGHT(x, i) x[i]
+#define    RED(x, i) x[i]
+#define  GREEN(x, i) x[i+1]
+#define   BLUE(x, i) x[i+2]
+#else
+apa102<D,6,D,5> myLeds;
+#define PSIZE 4
+#define BRIGHT(x, i) x[i]
+#define   BLUE(x, i) x[i+1]
+#define  GREEN(x, i) x[i+2]
+#define    RED(x, i) x[i+3]
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Waits then clears the LED strip.
@@ -70,17 +80,18 @@ void holdAndClear(uint16_t on_time, uint16_t off_time)
 void colorN(uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3*numPixels] = {};
+	uint8_t array[PSIZE*numPixels] = {};
 
 	// Set each set of 3 bytes for every pixel
 	for (uint16_t i = 0; i < numPixels; i++) {
-		  RED(array, i) = red;
-		GREEN(array, i) = green;
-		 BLUE(array, i) = blue;
+		BRIGHT(array, i) = 0xFF;
+		   RED(array, i) = red;
+		 GREEN(array, i) = green;
+		  BLUE(array, i) = blue;
 	}
 
 	// Display the LEDs
-	myLeds.sendPixels(numPixels, array);
+	myLeds.draw(PSIZE*numPixels, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -90,17 +101,17 @@ void colorN(uint8_t red, uint8_t green, uint8_t blue)
 ////////////////////////////////////////////////////////////////////////////////
 void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 {
-	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
 	uint8_t dim = pos+1;
-	uint8_t array[3*dim];
+	uint8_t array[PSIZE*dim];
 	memset(array,0,sizeof(array));
 
-	  RED(array, pos) = red;
-	GREEN(array, pos) = green;
-	 BLUE(array, pos) = blue;
+	BRIGHT(array, pos) = 0xFF;
+	   RED(array, pos) = red;
+	 GREEN(array, pos) = green;
+	  BLUE(array, pos) = blue;
 
 	// Display the LEDs
-	myLeds.sendPixels(dim, array);
+	myLeds.draw(dim, array);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -114,23 +125,19 @@ void color1(uint8_t pos, uint8_t red, uint8_t green, uint8_t blue)
 void color1N(uint8_t red, uint8_t green, uint8_t blue)
 {
 	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3];
+	uint8_t array[PSIZE];
 
-	  RED(array, 0) = red;
-	GREEN(array, 0) = green;
-	 BLUE(array, 0) = blue;
-
-	// Disable interupts, save the old interupt state
-	const uint8_t oldSREG = SREG;
-	cli();
+	BRIGHT(array, 0) = 0xFF;
+	   RED(array, 0) = red;
+	 GREEN(array, 0) = green;
+	  BLUE(array, 0) = blue;
 
 	// Display the LEDs
+	myLeds.begin();
 	for (uint16_t i = 0; i < numPixels; i++) {
-		myLeds.sendPixels(1, array);
+		myLeds.send(1, array);
 	}
-
-	// Restore the old interrupt state
-	SREG = oldSREG;
+	myLeds.end();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -161,25 +168,27 @@ void colorWheel(uint8_t incStep, uint8_t & R, uint8_t & G, uint8_t & B)
 ////////////////////////////////////////////////////////////////////////////////
 void rainbow(uint8_t brightness, uint8_t incLevel)
 {
-	// We multiply by 3 because A pixel is 3 bytes, {G,R,B}
-	uint8_t array[3*numPixels] = {};
+	uint8_t array[PSIZE*numPixels] = {};
 
 	// Initialize the colors on the array
-	  RED(array, 0) = brightness;
-	GREEN(array, 0) = 0;
-	 BLUE(array, 0) = 0;
+	BRIGHT(array, 0) = 0xFF;
+	   RED(array, 0) = brightness;
+	 GREEN(array, 0) = 0;
+	  BLUE(array, 0) = 0;
+
 	for (uint16_t i = 1; i < numPixels; i++) {
 		// Set pix to previous pix color
-		  RED(array, i) = RED(array, i-1);
-		GREEN(array, i) = GREEN(array, i-1);
-		 BLUE(array, i) = BLUE(array, i-1);
+		BRIGHT(array, i) = 0xFF;
+		   RED(array, i) = RED(array, i-1);
+		 GREEN(array, i) = GREEN(array, i-1);
+		  BLUE(array, i) = BLUE(array, i-1);
 		// Then rotate it to its final color.
 		colorWheel(incLevel, RED(array, i), GREEN(array, i), BLUE(array, i));
 	}
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
-		myLeds.sendPixels(numPixels, array);
+		myLeds.draw(numPixels, array);
 		delay(100);
 
 		// Rotate the colors based on the pixel's previous color.
@@ -203,18 +212,18 @@ void rainbow1N(uint8_t brightness, uint8_t incLevel)
 	uint8_t array[3];
 
 	// Initialize the colors on the array
-	  RED(array, 0) = brightness;
-	GREEN(array, 0) = 0;
-	 BLUE(array, 0) = 0;
+	BRIGHT(array, 0) = 0xFF;
+	   RED(array, 0) = brightness;
+	 GREEN(array, 0) = 0;
+	  BLUE(array, 0) = 0;
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 100 ; iter++) {
-		const uint8_t oldSREG = SREG;
-		cli();
+		myLeds.begin();
 		for (uint16_t i = 0; i < numPixels ; i++) {
 			myLeds.sendPixels(1, array);
 		}
-		SREG = oldSREG;
+		myLeds.end();
 		delay(100);
 
 		// Rotate the colors based on the pixel's previous color.
@@ -235,19 +244,19 @@ void jitter()
 	const uint8_t maxJitter = 5;
 	const uint8_t arrayDim = numPixels/2 + maxJitter+1;
 
-	// A pixel is 3 bytes
-	uint8_t array[3*arrayDim] = {};
+	uint8_t array[PSIZE*arrayDim] = {};
 
 	// Set each set of 3 bytes for every pixel
 	for (uint16_t i = 0; i < arrayDim; i++) {
+		BRIGHT(array, i) = 0xFF;
 		if (i % 2 == 0) {
-			  RED(array, 0) = 8;
+			  RED(array, i) = 8;
 		}
 		if (i % 3 == 0) {
-			GREEN(array, 0) = 8;
+			GREEN(array, i) = 8;
 		}
 		if (i % 5 == 0) {
-			 BLUE(array, 0) = 8;
+			 BLUE(array, i) = 8;
 		}
 	}
 	// Mark one bright red pixel marker to show how LEDs are displayed
@@ -263,14 +272,13 @@ void jitter()
 			// We multiply by 3 because a pixel is 3 bytes.
 			const uint8_t * displayPt = &array[3 * position];
 
-			const uint8_t oldSREG = SREG;
-			cli();
 			// Display same pattern twice, separated by a fixed pixel in the middle.
 			// This just demonstrates how to do more complex animations.
+			myLeds.begin();
 			myLeds.sendPixels(numPixels/2, displayPt);
 			myLeds.sendPixels(1, &array[3*maxJitter]);
 			myLeds.sendPixels(numPixels/2-1, displayPt);
-			SREG = oldSREG;
+			myLeds.end();
 
 			delay(300);
 		}

@@ -38,13 +38,14 @@ const uint16_t numPixels = 1000; // Max: 64K pixels
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief this definition allows you to select which digital port the LED strip
 /// is attached to: Valid are ports A through D, 0 to 7. For AtTiny, you may
-/// want to use port D2 instead of D6.
+/// want to use port B2 instead of D6.
 /// Uncomment the LED strip model you are using and comment the others. By
 /// default the ws2812b LED strip is used.
 ws2812b<D,6> myLeds;
-//sk6812<D,2> myLeds;
-//apa104<D,2> myLeds;
-//apa106<D,2> myLeds;
+//sk6812<B,2> myLeds;
+//apa102<D,6,D,5> myLeds;
+//apa104<B,2> myLeds;
+//apa106<B,2> myLeds;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -75,7 +76,7 @@ void color1(uint8_t red, uint8_t green, uint8_t blue)
 	pix[0].b = blue;
 
 	// Display the LEDs
-	myLeds.sendPixels(1, pix);
+	myLeds.draw(1, pix);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -94,17 +95,12 @@ void color1N(uint8_t red, uint8_t green, uint8_t blue)
 	pix[0].g = green;
 	pix[0].b = blue;
 
-	// Disable interupts, save the old interupt state
-	const uint8_t oldSREG = SREG;
-	cli();
-
 	// Display the LEDs
+	myLeds.begin();
 	for (uint16_t i = 0; i < numPixels; i++) {
-		myLeds.sendPixels(1, pix);
+		myLeds.send(1, pix);
 	}
-
-	// Restore the old interrupt state
-	SREG = oldSREG;
+	myLeds.end();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -152,13 +148,11 @@ void fade1N(uint8_t brightness, uint8_t incLevel)
 
 	// Display the LEDs
 	for (uint16_t iter = 0; iter < 20 ; iter++) {
-		const uint8_t oldSREG = SREG;
-		cli();
+		myLeds.begin();
 		for (uint16_t i = 0; i < numPixels ; i++) {
-			myLeds.sendPixels(1, pix);
+			myLeds.send(1, pix);
 		}
-		SREG = oldSREG;
-		delay(100);
+		myLeds.end();
 
 		// Rotate the colors based on the pixel's previous color.
 		colorWheel(incLevel, pix[0].r, pix[0].g, pix[0].b);
@@ -184,14 +178,13 @@ void rainbow1N(uint8_t brightness)
 
   // Display the LEDs
   for (uint16_t iter = 0; iter < 20 ; iter++) {
-    const uint8_t oldSREG = SREG;
-    cli();
+    myLeds.begin();
     for (uint16_t i = 0; i < numPixels ; i++) {
-      myLeds.sendPixels(1, pix);
+      myLeds.send(1, pix);
       // Rotate the colors based on the pixel's previous color.
       colorWheel(1, pix[0].r, pix[0].g, pix[0].b);
     }
-    SREG = oldSREG;
+    myLeds.end();
     delay(100);
   }
 }
@@ -230,16 +223,16 @@ void loop()
 	holdAndClear(1000,200);
 
 	// Show numPixels dim pixels, R, G then B 
-	color1N(8,0,0);
+	color1N(2,0,0);
 	holdAndClear(1000,200);
-	color1N(0,8,0);
+	color1N(0,2,0);
 	holdAndClear(1000,200);
-	color1N(0,0,8);
+	color1N(0,0,2);
 	holdAndClear(1000,200);
 
   // Rainbows
-  rainbow1N(16);
+  rainbow1N(4);
   holdAndClear(1000,200);
-  fade1N(16, 1);
+  fade1N(4, 1);
   holdAndClear(1000,200);
 }

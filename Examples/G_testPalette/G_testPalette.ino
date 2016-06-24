@@ -112,7 +112,7 @@ void loop()
   
   uint16_t pos = random(numPixels);
 
-	myLeds.sendPixels<bitsPerPixel,grb>(
+	myLeds.draw<bitsPerPixel,grb>(
 		numPixels, pixels,
 		&gradient[r], &gradient[g], &gradient[b]);
 
