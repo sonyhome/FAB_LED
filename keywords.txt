@@ -52,7 +52,8 @@ avrBitbangLedStrip  KEYWORD2
 debug               KEYWORD2
 clear               KEYWORD2
 grey                KEYWORD2
-sendPixels          KEYWORD2
+send                KEYWORD2
+draw                KEYWORD2
 RGBtoGBR            KEYWORD2
 refresh             KEYWORD2
 minRefreshDelay     KEYWORD2

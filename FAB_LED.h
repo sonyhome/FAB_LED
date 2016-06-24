@@ -57,11 +57,13 @@
 
 // Extra pixels bytes, 0 none, 2 invalid.
 #define PT_XXXW  0b00000001 // Postfix white pixel brightness (sk6812)
+#define PT_WXXX  0b00000100 // Prefix white pixel brightness (uint32_t)
 #define PT_BXXX  0b00000010 // APA 102 prefix brightness pixel 0b111bbbbb
-#define PT_XBYT  0b00000011 // Mask for extra byte(s)
-#define PT_HAS_WHITE(v)  ((v) & PT_XBYT == PT_XXXW)
-#define PT_HAS_BRIGHT(v) ((v) & PT_XBYT == PT_BXXX)
-#define PT_BYTES_PER_PIXEL(v) (((v) & PT_XBYT != 0) ? 4 : 3)
+//#define PT_XXXB  0b00000100
+//#define PT_XBYT  0b00000111 // Mask for extra byte(s)
+//#define PT_HAS_WHITE(v)  ((v) & PT_XBYT == PT_XXXW)
+//#define PT_HAS_BRIGHT(v) ((v) & PT_XBYT == PT_BXXX)
+#define PT_BYTES_PER_PIXEL(v) (3 + (((v) & PT_BXXX) == PT_BXXX) + (((v) & PT_XXXW) == PT_XXXW) + (((v) & PT_WXXX) == PT_WXXX))
 
 
 // apa102, apa106 native color order
@@ -96,6 +98,15 @@ typedef struct {
 	union { uint8_t w; uint8_t white; };
 } rgbw;
 
+// uint32_t conversion
+typedef struct {
+	static const uint8_t type = PT_RGB | PT_WXXX;
+	union { uint8_t w; uint8_t white; };
+	union { uint8_t r; uint8_t red; };
+	union { uint8_t g; uint8_t green; };
+	union { uint8_t b; uint8_t blue; };
+} wrgb;
+
 // sk6812 native color order
 typedef struct {
 	static const uint8_t type = PT_GRB | PT_XXXW;
@@ -117,10 +128,11 @@ typedef struct {
 } hbgr;
 
 /// @brief This macro lists all the LED structure types suported by the API
+/// @todo uint32_t type to rgbw likely screws up rgbw support!!!
 #define API_LIST        \
 	API_ENTRY(count/stripBPP, uint8_t, pixelClass)  \
 	API_ENTRY(count, uint16_t, r5g6b5)  \
-	API_ENTRY(count, uint32_t, hbgr)  \
+	API_ENTRY(count, uint32_t, wrgb)  \
 	API_ENTRY(count, rgb, rgb)  \
 	API_ENTRY(count, grb, grb)  \
 	API_ENTRY(count, bgr, bgr)  \
@@ -434,7 +446,7 @@ class avrBitbangLedStrip
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @brief Sends N uint32_t in a row set to zero or 0xFFFFFFFF, to build
+	/// @brief Sends N bits in a row set to zero or one, to build
 	/// a frame for each pixel, and for a whole strip, SPI protocol only
 	////////////////////////////////////////////////////////////////////////
 	static inline void
@@ -541,7 +553,7 @@ class avrBitbangLedStrip
 	/// @note
 	/// uint16_t array (assume r:5,g:6,b:5)
 	/// uint8_t array  (assume bytes are in native LED strip format)
-	/// uint32_t array (assume hbgr. The first byte must be > 0xE0 if the
+	/// uint32_t array (assume wrgb. The first byte must be > 0xE0 if the
 	///                 strip is APA-102!)
 	////////////////////////////////////////////////////////////////////////
 #define API_ENTRY(_countOut, _typeIn, _typeOut)                                \
@@ -688,13 +700,13 @@ class avrBitbangLedStrip
 	/// @note
 	/// uint16_t array (assume r:5,g:6,b:5)
 	/// uint8_t array  (assume bytes are in native LED strip format)
-	/// uint32_t array (assume hbgr. The first byte must be > 0xE0 if the
+	/// uint32_t array (assume wrgb. The first byte must be > 0xE0 if the
 	///                 strip is APA-102!)
 	////////////////////////////////////////////////////////////////////////
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	static inline void draw(const uint16_t count, const _typeIn * array) { \
 		begin(); \
-		send<_typeOut>(_countOut, (_typeOut *) array); \
+		send(count, array); \
 		end(); \
 	} __attribute__ ((always_inline)); 
 	API_LIST;
@@ -726,7 +738,7 @@ class avrBitbangLedStrip
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	static inline void draw(const uint16_t count, const _typeIn * array, uint8_t * map) { \
 		begin(); \
-		send<255, _typeOut, _typeOut, uint8_t>(_countOut, (_typeOut *) array, NULL, map); \
+		send(count, array, NULL, map); \
 		end(); \
 	} __attribute__ ((always_inline));
 	API_LIST
@@ -736,7 +748,7 @@ class avrBitbangLedStrip
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	static inline void draw(const uint16_t count, const _typeIn * array, uint16_t * map) { \
 		begin(); \
-		send<0,_typeOut,_typeOut,uint16_t>(_countOut, (_typeOut *) array, NULL, map); \
+		send(count, array, NULL, map); \
 		end(); \
 	} __attribute__ ((always_inline));
 	API_LIST
@@ -775,7 +787,7 @@ class avrBitbangLedStrip
 	template <const uint8_t bitsPerPixel> \
 	static inline void draw(const uint16_t count, const uint8_t * array, const _typeIn * palette, uint8_t * map = NULL) { \
 		begin(); \
-		send<bitsPerPixel, uint8_t, _typeOut, uint8_t>(_countOut, array, (_typeOut *) palette, map); \
+		send(count, array, palette, map); \
 		end(); \
 	} __attribute__ ((always_inline));
 	API_LIST
@@ -786,7 +798,7 @@ class avrBitbangLedStrip
 	template <const uint8_t bitsPerPixel> \
 	static inline void draw(const uint16_t count, const uint16_t * array, const _typeIn * palette, uint16_t * map = NULL) { \
 		begin(); \
-		send<bitsPerPixel, uint16_t, _typeOut, uint16_t>(_countOut, array, (_typeOut *) palette, map); \
+		send(count, array, palette, map); \
 		end(); \
 	} __attribute__ ((always_inline));
 	API_LIST
@@ -832,7 +844,7 @@ avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
 			SET_DDR_HIGH(dataPortId, dataPortPin);
 			SET_DDR_HIGH(clockPortId, clockPortPin);
 			// SPI: Reset LED strip to accept a refresh
-			spiSoftwareSendFrame(16, false);
+			spiSoftwareSendFrame(32, false);
 			break;
 		default:
 			// Init data port as out, set to low state
@@ -872,6 +884,9 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 	printChar(" cycles\n");
 
 	if (pixelClass::type & PT_BXXX) {
+		printChar("H");
+	}
+	if (pixelClass::type & PT_WXXX) {
 		printChar("W");
 	}
 	switch (pixelClass::type & PT_COL) {
@@ -1008,8 +1023,7 @@ avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendFrame(const uint16_t count, bool hi
 	} else {
 		SET_PORT_LOW(dataPortId, dataPortPin);
 	}
-	// for(uint32_t c = 0; c < 32 * count; c++) {
-	for(uint32_t c = 0; c < 8 * count; c++) {
+	for(uint16_t c = 0; c < count; c++) {
 		SET_PORT_LOW(clockPortId, clockPortPin);
 		SET_PORT_HIGH(clockPortId, clockPortPin);
 	}
@@ -1021,21 +1035,16 @@ avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendBytes(const uint16_t count, const u
 {
 	for(uint16_t cnt = 0; cnt < count; ++cnt) {
 		const uint8_t val = array[cnt];
-		// If LED strip is defined as 3 byte type (default) then hard code the first
-		// byte to 0xFF, aka max brightness.
-		// This hard-codes the APA-102 protocol here so it is a bit hacky.
-		if ((stripBPP >= 4) && ((cnt % 3) == 0)) {
-//			spiSoftwareSendFrame(1, true);
-		}
-		// To send a bit to SPI, set its value, then transtion clock low-high
+		// Send byte msbit first
 		for(int8_t b=7; b>=0; b--) {
 			const bool bit = (val>>b) & 0x1;
-			SET_PORT_LOW(clockPortId, clockPortPin);
  			if (bit) {
 				SET_PORT_HIGH(dataPortId, dataPortPin);
 			} else {
 				SET_PORT_LOW(dataPortId, dataPortPin);
 			}
+			// Latch the value in the LED
+			SET_PORT_LOW(clockPortId, clockPortPin);
 			SET_PORT_HIGH(clockPortId, clockPortPin);
 		}
 
@@ -1356,20 +1365,15 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value)
 {
+	pixelClass p;
+
+	// For APA102 set first byte to trigger LED protocol
+       	*(char*) & p = 0xFF;
+	p.r = p.g = p.b = value;
+
  	begin();
-	STATIC_ASSERT(stripBPP >= 3, too_many_bytes_per_pixel);
-	STATIC_ASSERT(stripBPP <= 4, too_many_bytes_per_pixel);
-	if (stripBPP == 3) {
-		const uint8_t array[3] = {value, value, value};
-		for(uint16_t i = 0; i < numPixels; i++) {
-			send(stripBPP, array);
-		}
-	} else if (stripBPP == 4) {
-/// @todo this is wrong
-		const uint8_t array[4] = {value, value, value, value};
-		for(uint16_t i = 0; i < numPixels; i++) {
-			send(stripBPP, array);
-		}
+	for(uint16_t i = 0; i < numPixels; i++) {
+		send(1, &p);
 	}
 	end();
 }
@@ -1385,7 +1389,7 @@ avrBitbangLedStrip<FAB_TVAR>::begin(void)
 {
 	if (protocol == SPI_BITBANG) {
 		// SPI: Send start frame of 32 bits set to zero to force refresh
-		spiSoftwareSendFrame(4, false);
+		spiSoftwareSendFrame(32, false);
 	} else {
 		// 1-wire: Delay next pixels to cause a refresh
 		delay(minMsRefresh);
@@ -1401,7 +1405,7 @@ avrBitbangLedStrip<FAB_TVAR>::end(void)
 {
 	if (protocol == SPI_BITBANG) {
 		// Send end frame equal to 1/2 bit per pixel sent.
-		spiSoftwareSendFrame(++pixelsDisplayed/2, true);
+		spiSoftwareSendFrame((++pixelsDisplayed)/2, true);
 		pixelsDisplayed = 0;
 	} else {
 		// Restore interrupts.
@@ -1431,15 +1435,23 @@ avrBitbangLedStrip<FAB_TVAR>::send(
 			const pixelClassF & a = array[i];
 			const uint8_t * aRaw = (const uint8_t *) & a;
 
+			// If statement is resolved at compile time
 			if (pixelClass::type & pixelClassF::type & PT_BXXX) {
 				pRaw[0] = aRaw[0];
+			}
+			// If statement is resolved at compile time
+			if (pixelClass::type & pixelClassF::type & PT_XXXW) {
+				pRaw[3] = aRaw[3];
+			} else if (pixelClass::type & pixelClassF::type & PT_WXXX) {
+				pRaw[0] = aRaw[0];
+			} else if ((pixelClass::type & PT_XXXW) && (pixelClassF::type & PT_WXXX)) {
+				pRaw[3] = aRaw[0];
+			} else if ((pixelClass::type & PT_WXXX) && (pixelClassF::type & PT_XXXW)) {
+				pRaw[0] = aRaw[3];
 			}
 			p.r = a.r;
 			p.g = a.g;
 			p.b = a.b;
-			if (pixelClass::type & pixelClassF::type & PT_XXXW) {
-				pRaw[3] = aRaw[3];
-			}
 
 			// Pixel p is a native type, send as-is
 			sendBytes(stripBPP, (uint8_t *) &p);
