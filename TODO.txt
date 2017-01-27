@@ -1,0 +1,10 @@
+Class structure:
+
+* Port<letter,protocol>
+  => Handle one Letter (8 pins) singleton
+  => Handle LED protocol [bitbang, spi]
+  => number of LEDs used? OR set it in a define?
+
+* LED_protocol : Port<letter,protocol>
+  => Handle pixel color format (rgb, grbw...)
+  => defines draw routines

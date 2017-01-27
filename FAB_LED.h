@@ -32,7 +32,8 @@
 #define STATIC_ASSERT4(COND,MSG,LIN) typedef char assert_##MSG##_##LIN[(!!(COND))*2-1]
 #define STATIC_ASSERT3(X,M,L) STATIC_ASSERT4(X, M, L)
 #define STATIC_ASSERT2(X,M,L) STATIC_ASSERT3(X,M,L)
-#define STATIC_ASSERT(X,M)    STATIC_ASSERT2(X,M,__LINE__)
+//#define STATIC_ASSERT(X,M)    STATIC_ASSERT2(X,M,__LINE__)
+#define STATIC_ASSERT(X,M)    
 #else
 #define SA2TXT2(x) # x
 #define SA2TXT(x) SA2TXT2(x)
@@ -65,7 +66,7 @@
 #define PT_IS_4B(v) ((v) & PT_XVAL != 0)
 
 // apa102, apa106 native color order
-typedef struct {
+typedef struct rgb_t {
 	static const uint8_t type = PT_RGB;
 	union { uint8_t r; uint8_t red; };
 	union { uint8_t g; uint8_t green; };
@@ -73,14 +74,14 @@ typedef struct {
 } rgb;
 
 // apa104, ws2812 native color order
-typedef struct {
+typedef struct grb_t {
 	static const uint8_t type = PT_GRB;
 	union { uint8_t g; uint8_t green; };
 	union { uint8_t r; uint8_t red; };
 	union { uint8_t b; uint8_t blue; };
 } grb;
 
-typedef struct {
+typedef struct bgr_t {
 	static const uint8_t type = PT_BGR;
 	union { uint8_t b; uint8_t blue; };
 	union { uint8_t g; uint8_t green; };
@@ -88,7 +89,7 @@ typedef struct {
 } bgr;
 
 // sk6812 native color order
-typedef struct {
+typedef struct rgbw_t {
 	static const uint8_t type = PT_RGB | PT_XXXW;
 	union { uint8_t r; uint8_t red; };
 	union { uint8_t g; uint8_t green; };
@@ -97,7 +98,7 @@ typedef struct {
 } rgbw;
 
 // sk6812 native color order
-typedef struct {
+typedef struct grbw_t {
 	static const uint8_t type = PT_GRB | PT_XXXW;
 	union { uint8_t g; uint8_t green; };
 	union { uint8_t r; uint8_t red; };
@@ -106,7 +107,7 @@ typedef struct {
 } grbw;
 
 // apa102 native color order
-typedef struct {
+typedef struct hbgr_t {
 	static const uint8_t type = PT_BGR | PT_BXXX;
 	union { uint8_t B; uint8_t brightness;
 	        uint8_t w; uint8_t white;
@@ -1368,7 +1369,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		sendBytes((const uint16_t) numPixels * bytesPerPixel, (const uint8_t *) pixelArray);
 	} else {
 		// 3 byte per pixel array, send 3 out of 4 bytes.
-		for (int i=0; i< numPixels; i++) {
+		for (uint16_t i=0; i< numPixels; i++) {
 			uint8_t * bytes = (uint8_t *) & pixelArray[i];
 			// For LED strips using 3 bytes per color, drop a byte.
 			sendBytes(bytesPerPixel, bytes);
