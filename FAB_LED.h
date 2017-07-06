@@ -188,7 +188,8 @@ enum pixelFormat {
 	GRBW = 5,
 	HBGR = 6
 };
-#define PIXEL_FORMAT_4B RGBW
+#define IS_PIXEL_FORMAT_3B(color) (color < RGBW)
+#define IS_PIXEL_FORMAT_4B(color) (color >= RGBW)
 
 /// @brief Type of low-level method to send data for the LED strip (see sendBytes)
 enum ledProtocol {
@@ -386,7 +387,7 @@ static const uint8_t blank[3] = {128,128,128};
 template <FAB_TDEF>
 class avrBitbangLedStrip
 {
-	static const uint8_t bytesPerPixel = (colors < PIXEL_FORMAT_4B) ? 3 : 4;
+	static const uint8_t bytesPerPixel = IS_PIXEL_FORMAT_3B(colors) ? 3 : 4;
 
 	public:
 	////////////////////////////////////////////////////////////////////////
@@ -848,7 +849,7 @@ avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendBytes(const uint16_t count, const u
 		// If LED strip is defined as 3 byte type (default) then hard code the first
 		// byte to 0xFF, aka max brightness.
 		// This hard-codes the APA-102 protocol here so it is a bit hacky.
-		if ((colors >= PIXEL_FORMAT_4B) && ((cnt % 3) == 0)) {
+		if (IS_PIXEL_FORMAT_4B(colors) && ((cnt % 3) == 0)) {
 //			spiSoftwareSendFrame(1, true);
 		}
 		// To send a bit to SPI, set its value, then transtion clock low-high
@@ -876,7 +877,7 @@ inline void
 avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
 	// Number of bytes per pixel
-	const uint16_t bpp =  (colors < PIXEL_FORMAT_4B) ? 3 : 4;
+	const uint16_t bpp =  IS_PIXEL_FORMAT_3B(colors) ? 3 : 4;
 
 	// If split mode, we send a block of half size
 	const uint16_t blockSize = (protocol == TWO_PORT_SPLIT_BITBANG) ? count/2 : count;
@@ -963,7 +964,7 @@ template<FAB_TDEF>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
 {
-	const uint16_t bpp =  (colors < PIXEL_FORMAT_4B) ? 3 : 4;
+	const uint16_t bpp =  IS_PIXEL_FORMAT_3B(colors) ? 3 : 4;
 	const uint16_t blockSize __asm__("r14") = count / (clockPortPin - dataPortPin + 1) / bpp * bpp;
 
 	// Buffer one byte of each port in register
@@ -1216,7 +1217,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 
 
 // Since colors is a constant, the switch case will convert to 4 sendBytes max.
-#define SEND_REMAPPED_PIXELS(numPixels, array, sendWhite)          \
+#define _SEND_REMAPPED_PIXELS(numPixels, array, sendWhite)         \
  		DISABLE_INTERRUPTS;                                \
 		for (uint16_t i = 0; i < numPixels; i++) {         \
 			switch (colors) {                          \
@@ -1260,8 +1261,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		RESTORE_INTERRUPTS;
 
 #define sendWhiteMacro sendBytes(1, &array[i].w)
-#define SEND_REMAPPED_PIXELS_4B(numPixels, array) SEND_REMAPPED_PIXELS(numPixels, array, sendWhiteMacro)
-#define SEND_REMAPPED_PIXELS_3B(numPixels, array) SEND_REMAPPED_PIXELS(numPixels, array, )
+#define SEND_REMAPPED_PIXELS_4B(numPixels, array) _SEND_REMAPPED_PIXELS(numPixels, array, sendWhiteMacro)
+#define SEND_REMAPPED_PIXELS_3B(numPixels, array) _SEND_REMAPPED_PIXELS(numPixels, array, )
+#define SEND_REMAPPED_PIXELS(color, numPixels, array) if IS_PIXEL_FORMAT_3B(color) SEND_REMAPPED_PIXELS_3B(numPixels, array) else SEND_REMAPPED_PIXELS_4B(numPixels, array)
 
 // 4B struct input arrays
 template<FAB_TDEF>
@@ -1271,13 +1273,15 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		const rgbw * array)
 {
 	if (colors == RGBW || colors == NONE) {
+		// Native format, send as raw bytes
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else if (colors == RGB) {
 		// Output array is same order but 3B, send as 32bit, which will be converted
+		// because last byte will be dropped
 		sendPixels(numPixels, (const uint32_t *) array);
 	} else {
 		// Handle input array of different format than LED strip
-		SEND_REMAPPED_PIXELS_4B(numPixels, array);
+		SEND_REMAPPED_PIXELS(colors, numPixels, array);
 	}
 }
 
@@ -1288,12 +1292,15 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		const grbw * array)
 {
 	if (colors == GRBW || colors == NONE) {
+		// Native format, send as raw bytes
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else if (colors == GRB) {
+		// Output array is same order but 3B, send as 32bit, which will be converted
+		// because last byte will be dropped
 		sendPixels(numPixels, (const uint32_t *) array);
 	} else {
 		// Handle input array of different format than LED strip
-		SEND_REMAPPED_PIXELS_4B(numPixels, array);
+		SEND_REMAPPED_PIXELS(colors, numPixels, array);
 	}
 }
 
@@ -1304,12 +1311,15 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		const hbgr * array)
 {
 	if (colors == HBGR || colors == NONE) {
+		// Native format, send as raw bytes
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else if (colors == BGR) {
+		// Output array is same order but 3B, send as 32bit, which will be converted
+		// because last byte will be dropped
 		sendPixels(numPixels, (const uint32_t *) array);
 	} else {
 		// Handle input array of different format than LED strip
-		SEND_REMAPPED_PIXELS_4B(numPixels, array);
+		SEND_REMAPPED_PIXELS(colors, numPixels, array);
 	}
 }
 
@@ -1325,7 +1335,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else {
 		// 4B, or 3B pixel array with different byte order, must be converted.
-		SEND_REMAPPED_PIXELS_3B(numPixels, array);
+		SEND_REMAPPED_PIXELS(colors, numPixels, array);
 	}
 }
 
@@ -1338,7 +1348,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	if (colors == GRB || colors == NONE) {
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else {
-		SEND_REMAPPED_PIXELS_3B(numPixels, array);
+		SEND_REMAPPED_PIXELS(colors, numPixels, array);
 	}
 }
 
@@ -1351,7 +1361,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 	if (colors == BGR || colors == NONE) {
 		sendPixels(numPixels, (const uint8_t *) array);
 	} else {
-		SEND_REMAPPED_PIXELS_3B(numPixels, array);
+		SEND_REMAPPED_PIXELS(colors, numPixels, array);
 	}
 }
 
@@ -1364,7 +1374,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 {
  	DISABLE_INTERRUPTS;
 
-	if (colors >= PIXEL_FORMAT_4B) {
+	if IS_PIXEL_FORMAT_4B(colors) {
 		// 4 byte per pixel array, send all bytes.
 		sendBytes((const uint16_t) numPixels * bytesPerPixel, (const uint8_t *) pixelArray);
 	} else {
