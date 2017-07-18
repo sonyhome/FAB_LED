@@ -1217,7 +1217,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 
 
 // Since colors is a constant, the switch case will convert to 4 sendBytes max.
-#define _SEND_REMAPPED_PIXELS(numPixels, array, sendWhite)         \
+#define SEND_REMAPPED_PIXELS(color, numPixels, array) {            \
  		DISABLE_INTERRUPTS;                                \
 		for (uint16_t i = 0; i < numPixels; i++) {         \
 			switch (colors) {                          \
@@ -1240,16 +1240,16 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 					sendBytes(1, &array[i].r); \
 					sendBytes(1, &array[i].g); \
 					sendBytes(1, &array[i].b); \
-					sendWhite;                 \
+					sendBytes(1, &((rgbw*)array)[i].w); \
 					break;                     \
 				case GRBW:                         \
 					sendBytes(1, &array[i].g); \
 					sendBytes(1, &array[i].r); \
 					sendBytes(1, &array[i].b); \
-					sendWhite;                 \
+					sendBytes(1, &((grbw*)array)[i].w); \
 					break;                     \
 				case HBGR:                         \
-					sendWhite;                 \
+					sendBytes(1, &((hbgr*)array)[i].w); \
 					sendBytes(1, &array[i].b); \
 					sendBytes(1, &array[i].g); \
 					sendBytes(1, &array[i].r); \
@@ -1258,12 +1258,9 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 					break;                     \
 			}                                          \
 		}                                                  \
-		RESTORE_INTERRUPTS;
+		RESTORE_INTERRUPTS;                                \
+	}
 
-#define sendWhiteMacro sendBytes(1, &array[i].w)
-#define SEND_REMAPPED_PIXELS_4B(numPixels, array) _SEND_REMAPPED_PIXELS(numPixels, array, sendWhiteMacro)
-#define SEND_REMAPPED_PIXELS_3B(numPixels, array) _SEND_REMAPPED_PIXELS(numPixels, array, )
-#define SEND_REMAPPED_PIXELS(color, numPixels, array) if IS_PIXEL_FORMAT_3B(color) SEND_REMAPPED_PIXELS_3B(numPixels, array) else SEND_REMAPPED_PIXELS_4B(numPixels, array)
 
 // 4B struct input arrays
 template<FAB_TDEF>
