@@ -23,74 +23,84 @@
 #include <stdint.h>
 #include <Arduino.h>
 
+////////////////////////////////////////////////////////////////////////////////
+/// General definitions
+////////////////////////////////////////////////////////////////////////////////
+
 // This code is sensitive to optimizations if you want to cascade function calls,
 // so make the IDE compile at -O2 instead of -Os (size).
 #pragma GCC optimize ("-O2")
 
-// static_assert is a built-in C++ 11 assert that Arduino does not seem to support
+// static_assert is a built-in C++ 11 assert that Arduino g++ does not implement
 #ifndef static_assert
-#define STATIC_ASSERT4(COND,MSG,LIN) typedef char assert_##MSG##_##LIN[(!!(COND))*2-1]
-#define STATIC_ASSERT3(X,M,L) STATIC_ASSERT4(X, M, L)
-#define STATIC_ASSERT2(X,M,L) STATIC_ASSERT3(X,M,L)
-#define STATIC_ASSERT(X,M)    STATIC_ASSERT2(X,M,__LINE__)
-#else
-#define SA2TXT2(x) # x
-#define SA2TXT(x) SA2TXT2(x)
-#define STATIC_ASSERT(X,M) static_assert(X, SA2TXT(M))
+#define _STATIC_ASSERT(a,b) a##b
+#define static_assert(cond, key)	enum { _STATIC_ASSERT(key, __LINE__) = \
+					sizeof( char[(cond) ? +1 : -1] ) }
 #endif
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief typed pixel structures for every LED protocol supported.
 /// These simplify access to a pixel byte array, or even to send typed pixels
 /// to the LED strip, as the programmer directly access pixel colors by name.
+/// Each struct has a *static* "type" field used to process the pixel properly
+/// when it is passed as a template type.
 ////////////////////////////////////////////////////////////////////////////////
 
-// Pixel colors byte order, 0 and 7 invalid.
-#define PT_RGB   0b00100000
-#define PT_GRB   0b01000000
-#define PT_BGR   0b10000000
-//#define PT_RBG 0b11000000
-//#define PT_GBR 0b10100000
-//#define PT_BRG 0b01100000
-#define PT_COL   0b11100000 // Mask for 3-byte colors
-#define PT_IS_SAME_COLOR(v1, v2) ((v1) & T_COL == (v2) & T_COL)
+/// @brief Pixel Type Colors byte order
+#define PT_COL    0b11100000 // Mask for the 3-byte colors defined below
+#define PT_RGB    0b00100000
+#define PT_GRB    0b01000000
+#define PT_BGR    0b10000000
+//#define PT_RBG  0b11000000 // Unused yet
+//#define PT_GBR  0b10100000 // Unused yet
+//#define PT_BRG  0b01100000 // Unused yet
+#define PT_IS_SAME_COLOR_ORDER(a, b) ((a) & PT_COL == (b) & PT_COL)
 
-// Extra pixels bytes, 0 none, 2 invalid.
-#define PT_XXXW  0b00000001 // Postfix white pixel brightness (sk6812)
-#define PT_WXXX  0b00000100 // Prefix white pixel brightness (uint32_t)
-#define PT_BXXX  0b00000010 // APA 102 prefix brightness pixel 0b111bbbbb
-//#define PT_XXXB  0b00000100
-//#define PT_XBYT  0b00000111 // Mask for extra byte(s)
-//#define PT_HAS_WHITE(v)  ((v) & PT_XBYT == PT_XXXW)
-//#define PT_HAS_BRIGHT(v) ((v) & PT_XBYT == PT_BXXX)
-#define PT_BYTES_PER_PIXEL(v) (3 + (((v) & PT_BXXX) == PT_BXXX) + (((v) & PT_XXXW) == PT_XXXW) + (((v) & PT_WXXX) == PT_WXXX))
+/// @brief Pixel Type Extra Properties, 0 none, 2 invalid.
+#define PT_XTRA   0b00000111 // Mask for extra byte(s) defined below
+#define PT_XXXW   0b00000001 // Postfix white brightness (4-color sk6812 RGBW)
+#define PT_WXXX   0b00000010 // Prefix white pixel brightness (uint32_t)
+#define PT_BXXX   0b00000011 // Prefix 5bit brightness level (APA102 0b111bbbbb)
+#define PT_R5G6B5 0b00000100 // uint16_t with 5~6 bits per color
+/// @brief SK6812 has a white LED
+#define PT_HAS_WHITE(v)		((((v) & PT_XTRA) == PT_XXXW) || \
+				 (((v) & PT_XTRA) == PT_WXXX))
+/// @brief APA-102 has a global 5-bit brightness byte with top-3 bits set to 1
+#define PT_HAS_BRIGHT(v)	 (((v) & PT_XTRA) == PT_BXXX)
+/// @brief The math defines 3 or 4 byte per pixel only here:
+#define PT_BYTES_PER_PIXEL(v) (3 + (PT_HAS_WHITE(v) | PT_HAS_BRIGHT(v)))
 
-
-// apa102, apa106 native color order
-typedef struct {
+/// @brief apa102, apa106 native color order pixel array
+typedef struct _rgb {
 	static const uint8_t type = PT_RGB;
-	union { uint8_t r; uint8_t red; };
-	union { uint8_t g; uint8_t green; };
-	union { uint8_t b; uint8_t blue; };
+	union {
+		struct {
+			union { uint8_t r; uint8_t red; };
+			union { uint8_t g; uint8_t green; };
+			union { uint8_t b; uint8_t blue; };
+		};
+		uint8_t raw[3];
+	};
 } rgb;
 
-// apa104, ws2812 native color order
-typedef struct {
+/// @brief apa104, ws2812 native color order pixel array
+typedef struct _grb {
 	static const uint8_t type = PT_GRB;
 	union { uint8_t g; uint8_t green; };
 	union { uint8_t r; uint8_t red; };
 	union { uint8_t b; uint8_t blue; };
 } grb;
 
-typedef struct {
+typedef struct _bgr {
 	static const uint8_t type = PT_BGR;
 	union { uint8_t b; uint8_t blue; };
 	union { uint8_t g; uint8_t green; };
 	union { uint8_t r; uint8_t red; };
 } bgr;
 
-// sk6812 native color order
-typedef struct {
+/// @brief rgbw sk6812 native color order pixel array
+typedef struct _rgbw {
 	static const uint8_t type = PT_RGB | PT_XXXW;
 	union { uint8_t r; uint8_t red; };
 	union { uint8_t g; uint8_t green; };
@@ -98,8 +108,12 @@ typedef struct {
 	union { uint8_t w; uint8_t white; };
 } rgbw;
 
-// uint32_t conversion
-typedef struct {
+/// @brief uint32_t conversion
+/// We don't add PT_BXXX because APA102 require top 3 bits set to 1 and we would
+/// not be able to verify the user masked them properly. We could assume in raw
+/// uint32_t mode the user knows to set those bits properly but that makes the
+/// user code less portable across led strip types.
+typedef struct _wrgb {
 	static const uint8_t type = PT_RGB | PT_WXXX;
 	union { uint8_t w; uint8_t white; };
 	union { uint8_t r; uint8_t red; };
@@ -107,8 +121,8 @@ typedef struct {
 	union { uint8_t b; uint8_t blue; };
 } wrgb;
 
-// sk6812 native color order
-typedef struct {
+/// @brief  grbw sk6812 native color order pixel array
+typedef struct _grbw {
 	static const uint8_t type = PT_GRB | PT_XXXW;
 	union { uint8_t g; uint8_t green; };
 	union { uint8_t r; uint8_t red; };
@@ -116,8 +130,8 @@ typedef struct {
 	union { uint8_t w; uint8_t white; };
 } grbw;
 
-// apa102 native color order
-typedef struct {
+/// @brief apa102 native color order pixel array
+typedef struct _hbgr {
 	static const uint8_t type = PT_BGR | PT_BXXX;
 	union { uint8_t B; uint8_t brightness;
 	        uint8_t w; uint8_t white;
@@ -127,68 +141,203 @@ typedef struct {
 	union { uint8_t r; uint8_t red; };
 } hbgr;
 
-/// @brief This macro lists all the LED structure types suported by the API
+/// @brief compressed 16 bit pixel with 32/64/32 levels per color.
+/// Actual brightness is multiplied by 4 or 8.
+typedef struct _r5g6b5 {
+	static const uint8_t type = PT_R5G6B5;
+	uint16_t r : 5;
+	uint16_t g : 6;
+	uint16_t b : 5;
+} r5g6b5;
+
+/// @brief type to declare a pixel array where each pixel is an index to
+/// a color in a color palette. It supports 1, 2, 4 and 8 bits per pixel,
+/// for a max of 2, 4, 16 or 256 colors.
+typedef union _paletteColor {
+       struct {
+	       uint8_t p0:1, p1:1, p2:1, p3:1, p4:1, p5:1, p6:1, p7:1;
+       } bpp1;
+       struct {
+	       uint8_t p0:2, p1:2, p2:2, p3:2;
+       } bpp2;
+       struct {
+	       uint8_t p0:4, p1:4;
+       } bpp4;
+       uint8_t bpp8;
+} paletteColor;
+
+/// @brief Lists all the pixel types suported by the API
+/// The template parameters can use fab_led internal class types
+/// and constants.
+///
+/// API_ENTRY(_countOut, _typeIn, _typeOut)
+/// _countOut: Number of elements (bytes or pixels) to pass to the underlying
+///            implementation, usually count (aka number of pixels in array)
+///            unless the array is re-cast for palette support
+/// _typeIn:   The type of the user's array. There should be one entry for each
+///            pixel struct declared in this section.
+/// _typeOut:  The type to cast the user's array to. Usually same as _typeIn
+///            except for generic types which can map to palettes or other
+///            implicit types we assume. uint32_t is mapped to wrgb by default
+///            and uint16_t to r5g6b5 which is kind of a standard. For palette
+///            support the uint8_t input is parsed knowing defined stripBPP
+///            and the colors are expected to match pixelClass.
+///            This cast will allow the compiler to instantiate the templates
+///
+/// if _typeOut doesn't match the native pixel type of the LED strip, the
+/// functions will do automatically a conversion at a cost of extra code.
+///
 /// @todo uint32_t type to rgbw likely screws up rgbw support!!!
-#define API_LIST        \
-	API_ENTRY(count/stripBPP, uint8_t, pixelClass)  \
-	API_ENTRY(count, uint16_t, r5g6b5)  \
-	API_ENTRY(count, uint32_t, wrgb)  \
-	API_ENTRY(count, rgb, rgb)  \
-	API_ENTRY(count, grb, grb)  \
-	API_ENTRY(count, bgr, bgr)  \
-	API_ENTRY(count, rgbw, rgbw) \
-	API_ENTRY(count, grbw, grbw) \
+#define SEND_AND_DRAW_API_LIST                                                 \
+	API_ENTRY(count/stripBPP, paletteColor, pixelClass)                    \
+	API_ENTRY(count/stripBPP, uint8_t, pixelClass)                         \
+	API_ENTRY(count, r5g6b5, r5g6b5)                                       \
+	API_ENTRY(count, uint16_t, r5g6b5)                                     \
+	API_ENTRY(count, wrgb, wrgb)                                           \
+	API_ENTRY(count, uint32_t, wrgb)                                       \
+	API_ENTRY(count, rgb, rgb)                                             \
+	API_ENTRY(count, grb, grb)                                             \
+	API_ENTRY(count, bgr, bgr)                                             \
+	API_ENTRY(count, rgbw, rgbw)                                           \
+	API_ENTRY(count, grbw, grbw)                                           \
 	API_ENTRY(count, hbgr, hbgr)
 
+
+
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief Helper macro for palette index encoding into a char * array when
-/// using an 8bit or less per pixel with a uint8_t type.
+/// @brief Color Palette helper routines
 ////////////////////////////////////////////////////////////////////////////////
 
-/// @brief computes the size of a uint8_t array that uses pixels encoded with a
-/// palette. For example: uint8_t buffer[ARRAY_SIZE(128, 2)]; is an array of 128
-/// pixels encoded with 2 bits per pixel (4 colors).
+#if __cplusplus <= 201103L
+//  #error This library needs at least a C++11 compliant compiler
+#define constexpr inline
+#endif
+
+/// @brief converts number of bits per pixel to number of colors possible 2^bpp
+/// Example: 
+///   const uint8_t myBpp = 2;
+///   const uint8_t myNumColors = bpp2nc(myBpp);
+///   grb   myPalette[myNumColors] = myPalette();
+/// For 2 bits per pixel, this allocates a palette of 4 colors
+constexpr uint8_t bpp2nc(const uint8_t bpp)
+{
+	return 1 << bpp;
+};
+
+/// @brief converts number of colors supported to bits per pixels log2(nc)
+constexpr uint8_t nc2bpp(const uint8_t nc)
+{
+	return nc <= 2 ? 1 : ( 1 + nc2bpp(nc/2));
+};
+
+/// @brief Computes the size of the array holding pixel that use a color palette
+///   Example:
+///   paletteColor buffer[PIarraySize<2>(128)];
+/// Declares an array of 128 pixels encoded with 2 bits per pixel (4 colors).
+///
+/// template   bitsPerPixel Number of bits used to declare one pixel. One bit is
+///                         two colors, 2bits is 4, 4bits is 16, 8bits is 256.
+/// @param[in] numPixels    Number of pixels to display
+/// return     size in bytes of the array that can hold said number of pixels
+template <uint8_t bitsPerPixel>
+constexpr uint16_t PIarraySize(const uint16_t numPixels)
+{
+	return (((numPixels)+7) / 8 * (bitsPerPixel));
+};
 #define ARRAY_SIZE(numPixels, bitsPerPixel) (((numPixels)+7) / 8 * (bitsPerPixel))
 
-/// @brief Encode a pixel's color
-/// For example, for encoding colors on 2 bits (4 colors, 0,1,2,3, in the palette),
-/// Encoding color #3, using 2 bits per pixels, in the buffer for pixel i:
-/// SET_PIXEL(buffer, i, 2, 3);
-#define SET_PIXEL(array, index, bitsPerPixel, color)                           \
-	_SET_PIXEL((array), (index), (bitsPerPixel), (color))
+
+/// @brief Encode a pixel's color by setting the index of the color in the
+/// color palette.
+///   Example:
+///   grb myPalette[bpp2nc(2)] = myPalette(); // 2 bit pixels = 2^2 = 4 colors
+///   myPalette[1] = {g:128, r:0, b:0};
+///   paletteColor buffer<2>[PIarraySize(128)];
+///   for(int i=0; i < 128, i++) {
+///     PIsetPixel<2>(buffer, i, 1);
+///   }
+///   buffer[0].bpp2.p3 = 3;
+/// Declares a 2-bit color palette, sets color #1 to green, and then allocates a
+/// buffer of 128 pixels all set to use color #1. Lastly, set pixel 3 to color 3
+///
+/// template   bitsPerPixel Number of bits used to declare one pixel. One bit is
+///                         two colors, 2bits is 4, 4bits is 16, 8bits is 256.
+/// @param[in] array        Array containing the pixels
+/// @param[in] pixelIndex   Index of pixels to set
+/// @param[in] colorIndex   Index of color to set
+template <uint8_t bitsPerPixel>
+constexpr void PIsetPixel(uint8_t *array,
+			  const uint16_t pixelIndex,
+			  const uint8_t colorIndex)
+{
+	const uint8_t  pixelsPerByte = 8/bitsPerPixel;
+	const uint16_t arrayIndex = pixelIndex / pixelsPerByte;
+	const uint8_t  pixelBitOffset = (pixelIndex * pixelsPerByte) % 8;
+	const uint8_t  numColors = 1 << bitsPerPixel;
+	const uint8_t  colorMask = numColors - 1;
+	// Mask the color in case user screws up
+	const uint8_t  color = (colorIndex < numColors) ? colorIndex :
+				colorIndex & colorMask;
+
+	// Clear the pixel's bits and set them to the chosen color.
+	array[arrayIndex] =
+		(array[arrayIndex] & ~(colorMask << pixelBitOffset)) |
+		(color << pixelBitOffset);
+}
+//#define SET_PIXEL(array, index, bitsPerPixel, color) PIsetPixel<bitsPerPixel>(array, index, color)
+
 
 /// @brief extract a pixel's palette color index from a pixel array
-/// For example, colorIndex = GET_PIXEL(buffer, i, 2);
-#define GET_PIXEL(array, index, bitsPerPixel)                                  \
-	_GET_PIXEL((array), (index), (bitsPerPixel))
-
-// Internal definitions
-#define _SET_PIXEL(array, index, bitsPerPixel, color)                          \
-		array[index/(8/bitsPerPixel)] = (                              \
-			array[index/(8/bitsPerPixel)] &                        \
-			~(((1<<bitsPerPixel)-1) << ((index * bitsPerPixel)%8)) \
-		) | color << ((index * bitsPerPixel)%8)
-
-
-#define _GET_PIXEL(array, index, bitsPerPixel) (                               \
-			array[index/(8/bitsPerPixel)] >>(index*bitsPerPixel)%8 \
-		) & ((1<<bitsPerPixel)-1)
+///   Example:
+///   colorIndex = PIgetPixel<2>(buffer, i, 2);
+///
+/// template   bitsPerPixel Number of bits used to declare one pixel. One bit is
+///                         two colors, 2bits is 4, 4bits is 16, 8bits is 256.
+/// @param[in] array        Array containing the pixels
+/// @param[in] pixelIndex   Index of pixels to set
+/// return     Index of color of chosen pixel
+template <uint8_t bitsPerPixel>
+constexpr uint8_t PIgetPixel(const uint8_t *array,
+			     const uint16_t pixelIndex)
+{
+	const uint8_t  pixelsPerByte = 8/bitsPerPixel;
+	const uint16_t arrayIndex = pixelIndex / pixelsPerByte;
+	const uint8_t  pixelBitOffset = (pixelIndex * pixelsPerByte) % 8;
+	const uint8_t  numColors = 1 << bitsPerPixel;
+	const uint8_t  colorMask = numColors - 1;
+	return (array[arrayIndex] >> pixelBitOffset) % colorMask;
+};
+//#define GET_PIXEL(array, index, bitsPerPixel) PIgetPixel<bitsPerPixel>(array, index)
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Conversion between cycles and nano seconds
 ////////////////////////////////////////////////////////////////////////////////
-#define NS_PER_SEC          1000000000ULL
-#define CYCLES_PER_SEC      ((uint64_t) (F_CPU))
-#define CYCLES(time_ns)     (((CYCLES_PER_SEC * (time_ns)) + NS_PER_SEC - 1ULL) / NS_PER_SEC)
-#define NANOSECONDS(cycles) (((cycles) * NS_PER_SEC + CYCLES_PER_SEC-1) / CYCLES_PER_SEC)
+
+#define NSEC_PER_SEC    (1000ULL * 1000ULL * 1000ULL)
+#define CYCLES_PER_SEC  ((uint64_t) (F_CPU))
+#define CYCLES(time_ns) (((CYCLES_PER_SEC * (time_ns)) + NSEC_PER_SEC - 1ULL)  \
+			/ NSEC_PER_SEC)
+#define NSEC_PER_CYCLE(cycles) (((cycles) * NSEC_PER_SEC                       \
+				+ CYCLES_PER_SEC - 1ULL) / CYCLES_PER_SEC)
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief definitions for class template specializations
 ////////////////////////////////////////////////////////////////////////////////
 
-/// @brief AVR ports are referenced A through F. For example ws2812b<D,6>
+/// @brief AVR port registers are referenced A through F. Example ws2812b<D,6>
+/// references bit 6 of port D (pin D6).
+/// Reference:
+/// PIN: toggles the pin or reads the pin
+/// DDR: Data direction register (0: input, 1: output)
+/// PORT: (1 + input = pull up resistor, 1 + output = high, 0+ output = low)
+/// 0x20 PINA 0x21 DDRA 0x22 PORTA
+/// 0x23 PINB 0x24 DDRB 0x25 PORTB
+/// 0x26 PINC 0x27 DDRC 0x28 PORTC
+/// 0x29 PIND 0x2A DDRD 0x2B PORTD
+/// 0x2C PINE 0x2D DDRE 0x2E PORTE
+/// 0x2F PINF 0x30 DDRF 0x31 PORTF
 enum avrLedStripPort {
 	A = 1,
 	B = 2,
@@ -198,31 +347,40 @@ enum avrLedStripPort {
 	F = 6
 };
 
-/// @brief Type of low-level method to send data for the LED strip (see sendBytes)
+/// @brief Type for low-level SendBytes method to send data to the LED port
 enum ledProtocol {
-	ONE_PORT_BITBANG = 1,   // Any LED with single data line
-	TWO_PORT_SPLIT_BITBANG = 2, // Same, but update 2 ports in parallel, sending 1/2 the array to one port, and the other 1/2 to the other
-	TWO_PORT_INTLV_BITBANG = 3, // Same, but update 2 ports in parallel, interleaving the pixels of the array
-	EIGHT_PORT_BITBANG = 4, // Experimental
-	ONE_PORT_PWM = 5,       // Not implemented
-	ONE_PORT_UART = 6,      // Not implemented
+	// WS2812 APA104 SK6812 and similar data port only serial protocols
+	BITBANG_WS_1PORT = 1,	// Support LED with single data line, no clock,
+				// software bit-banging
+	BITBANG_WS_SPLIT2PORTS = 2, // Same, but update two ports in parallel,
+				// sending 1st half the array to one port, and
+				// the other half to the other
+	BITBANG_WS_INTLV2PORTS = 3, // Same, but update two ports in parallel,
+				// interleaving the pixels sent to each port
+	BITBANG_WS_8PORTS = 4,  // Split array in up to 8 blocks each sent to
+				// respective port bits
+	PWM_1PORT = 5,          // Not implemented, use hardware PWM
+	UART_1PORT = 6,         // Not implemented, use UART serial port
 
-	SPI_BITBANG = 7,        // APA-102 and any LED with data and clock line
-	SPI_HARDWARE = 8        // Not implemented
+	// APA102 WS2801 and similar clock+data protocols
+	BITBANG_SPI = 7,        // APA-102 and any LED with data and clock line
+				// Since clock is sent, not sensitive to CPU
+				// frequency nor interrupts
+	HARWARE_SPI = 8,       // Not implemented
+	UNSUPPORTED = 9
 };
-#define PROTOCOL_SPI SPI_BITBANG
+#define PROTOCOL_SPI BITBANG_SPI
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Hack to survive undefined port on Arduino
 /// avoid compilation errors for arduinos that are missing some of the 4 ports
 /// by defining all the unknown ports to be any of the known ones. This quiets
-/// the compiler, and that fluff code optimizes away.
+/// the compiler (useless code optimizes away).
 ////////////////////////////////////////////////////////////////////////////////
 
-// Define a DUMMY_PORT_ID that will be used to patch unknown ports to map to
-// the first existing port we find. Undefined ports won't be used but this
-// lets the compiler work without complaining.
+// Define a DUMMY_PORT/DUMMY_DDR used to patch unknown ports
+// This lets the compiler work without complaining.
 #if defined(PORTD)
 #define DUMMY_PORT PORTD
 #define DUMMY_DDR   DDRD
@@ -276,20 +434,23 @@ enum ledProtocol {
 #define AVR_DDR(id) _AVR_DDR((id))
 #define _AVR_DDR(id) ((id==A) ? DDRA : (id==B) ? DDRB : (id==C) ? DDRC : \
 		(id==D) ? DDRD : (id==E) ? DDRE : DDRF)
-#define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
-#define FAB_DDR(portId, val) AVR_DDR(portId) = val
+
+#define SET_DDR_PIN_HIGH(portId, portPin) AVR_DDR(portId) |=   1U << portPin
+#define SET_DDR_PIN_LOW( portId, portPin) AVR_DDR(portId) &= ~(1U << portPin)
+#define SET_DDR_BYTE(portId, val) AVR_DDR(portId) = val
 
 /// Port address & pin level manipulation
 #define AVR_PORT(id) _AVR_PORT((id))
 #define _AVR_PORT(id) ((id==A) ? PORTA : (id==B) ? PORTB : (id==C) ? PORTC : \
 		(id==D) ? PORTD : (id==E) ? PORTE : PORTF)
-#define FAB_PORT(portId, val) AVR_PORT(portId) = val
+
+#define SET_PORT_BYTE(portId, val) AVR_PORT(portId) = val
 // Note: gcc converts these bit manipulations to sbi and cbi instructions
-#define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
-#define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin);
+#define SET_PORT_PIN_HIGH(portId, portPin) AVR_PORT(portId) |=   1U << portPin
+#define SET_PORT_PIN_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin)
 
 /// Method to optimally delay N cycles with nops for bitBang.
-#define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count);
+#define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count)
 
 // Number of cycles sbi and cbi instructions take when using SET macros
 const int sbiCycles = 2;
@@ -311,15 +472,21 @@ const int cbiCycles = 2;
 /// @todo THE debug() function template resolution does not work on non optimized teensy
 //#define DISABLE_DEBUG_METHOD
 
-#define SET_DDR_HIGH( portId, portPin)
-#define FAB_DDR( portId, val)
-#define FAB_PORT(portId, val)
+#define SET_DDR_PIN_HIGH(portId, portPin)
+#define SET_DDR_PIN_LOW( portId, portPin)
+#define SET_DDR_BYTE( portId, val)
 
-#define SET_PORT_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
-#define SET_PORT_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
+#define SET_PORT_BYTE(portId, val) /* 8-port mode not supported */
+#define SET_PORT_PIN_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
+#define SET_PORT_PIN_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
 
 /// Delay N cycles using cycles register
-#define DELAY_CYCLES(count) {int till = count + ARM_DWT_CYCCNT; while (ARM_DWT_CYCCNT < till);}
+inline void spinDelay(const uint16_t count)
+{
+	const int till = count + ARM_DWT_CYCCNT;
+	while (ARM_DWT_CYCCNT < till);
+}
+#define DELAY_CYCLES(count) spinDelay(count)
 
 // Number of cycles sbi and cbi instructions take
 const int sbiCycles = 2;
@@ -361,32 +528,52 @@ const int cbiCycles = 2;
 ////////////////////////////////////////////////////////////////////////////////
 static const uint8_t blank[3] = {128,128,128};
 
-#define FAB_TDEF int16_t high1,             \
-		int16_t low1,               \
-		int16_t high0,              \
-		int16_t low0,               \
-		uint32_t minMsRefresh,      \
-		avrLedStripPort dataPortId, \
-		uint8_t dataPortPin,        \
-		avrLedStripPort clockPortId,\
-		uint8_t clockPortPin,       \
-		class pixelClass,         \
-		ledProtocol protocol
+/// @brief template parameters
+///	int16_t high1               Number of cycles high for logical one
+///	int16_t low1                Number of cycles  low for logical one
+///	int16_t high0               Number of cycles high for logical zero
+///	int16_t low0                Number of cycles  low for logical zero
+///	uint32_t minMsRefresh       Minimum msec delay to reset LED strip
+///	avrLedStripPort dataPortId  Port the LED strip DI is attached to
+///	uint8_t dataPortPin         Port bit the LED strip DI is attached to
+///	avrLedStripPort clockPortId Port the LED strip CI is attached to
+///	uint8_t clockPortPin        Port bit the LED strip CI is attached to
+///     class pixelClass            Native LED strip pixel type (grbw, etc.)
+///     ledProtocol protocol        LED strip communication protocol (spi, etc.)
 
-#define FAB_TVAR high1, low1, high0, low0, minMsRefresh, dataPortId, dataPortPin, clockPortId, clockPortPin, pixelClass, protocol
+/// @brief FAB_TDEF is the body of the class template declaration
+/// example: template <FAB_TDEF> class foo;
+#define FAB_TDEF                      \
+	int16_t         high1,        \
+	int16_t         low1,         \
+	int16_t         high0,        \
+	int16_t         low0,         \
+	uint32_t        minMsRefresh, \
+	avrLedStripPort dataPortId,   \
+	uint8_t         dataPortPin,  \
+	avrLedStripPort clockPortId,  \
+	uint8_t         clockPortPin, \
+	class           pixelClass,   \
+	ledProtocol     protocol
+
+/// @brief FAB_TVAR is the instantiation of class the template declaration
+/// example: template <FAB_TDEF> foo<FAB_TVAR>::function(...){...}
+#define FAB_TVAR                      \
+	                high1,        \
+	                low1,         \
+	                high0,        \
+	                low0,         \
+	                minMsRefresh, \
+	                dataPortId,   \
+	                dataPortPin,  \
+	                clockPortId,  \
+	                clockPortPin, \
+	                pixelClass,   \
+	                protocol
 
 /// @brief Class to drive LED strips. Relies on custom sendBytes() method to push data to LEDs
-//template<
-//	int16_t high1,          // Number of cycles high for logical one
-//	int16_t low1,           // Number of cycles  low for logical one
-//	int16_t high0,          // Number of cycles high for logical zero
-//	int16_t low0,           // Number of cycles  low for logical zero
-//	uint32_t minMsRefresh,  // Minimum milliseconds to wait to reset LED strip data stream
-//	avrLedStripPort dataPortId, // AVR port the LED strip is attached to
-//	uint8_t dataPortPin         // AVR port bit the LED strip is attached to
-//>
 template <FAB_TDEF>
-class avrBitbangLedStrip
+class fab_led
 {
 	/// @brief Constant declaring if LED strip uses 3 or 4 bytes per pixel
 	static const uint8_t stripBPP = PT_BYTES_PER_PIXEL(pixelClass::type);
@@ -394,27 +581,23 @@ class avrBitbangLedStrip
 	static uint16_t pixelsDisplayed;
 	static uint8_t oldSREG;
 
-	/// @brief internal type to convert uint16_t pixels
-	typedef struct {
-		static const uint8_t type = 0;
-		uint16_t r : 5;
-		uint16_t g : 6;
-		uint16_t b : 5;
-	} r5g6b5;
-
-	public:
+public:
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Constructor: Set selected dataPortId.dataPortPin to digital output
 	////////////////////////////////////////////////////////////////////////
-	avrBitbangLedStrip();
+	fab_led();
 	////////////////////////////////////////////////////////////////////////
-	~avrBitbangLedStrip() { };
+	~fab_led() { };
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Prints to console the configuration
-	/// @note You must implement the template print routines (see example)
-	/// Method can be disabled with:
-	/// #define DISABLE_DEBUG_METHOD
+	/// You must implement the template print routines
+	///   Example:
+	///   void myC(const char * s) { Serial.print(s); }
+	///   void myI(const uint32_t i) { Serial.print(i); }
+	///   foo.debug<myC, myS>();
+	/// The method can be disabled with:
+	///   #define DISABLE_DEBUG_METHOD
 	////////////////////////////////////////////////////////////////////////
 	template <void printChar(const char *),void printInt(uint32_t)>
 	static inline void debug(void);
@@ -445,46 +628,45 @@ class avrBitbangLedStrip
 	sendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
+private:
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Sends N bits in a row set to zero or one, to build
 	/// a frame for each pixel, and for a whole strip, SPI protocol only
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	spiSoftwareSendFrame(const uint16_t count, bool high)
+	bitbangSpi_Flatline(const uint16_t count, bool high)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @bried Implements sendBytes for the 1-port SPI protocol
+	/// @brief Implements sendBytes for the 1-port SPI protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	spiSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+	bitbangSpi_SendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Implements sendBytes for the 1-ports protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	onePortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+	bitbang1PortWs_SendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Implements sendBytes for the 2-ports protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+	bitbang2portWs_SendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Implements sendBytes for the 8-ports protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+	bitbang8PortWs_SendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 
-
-
-
+public:
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Clears the LED strip
 	/// @param[in] count  Number of pixels to erase
@@ -521,35 +703,66 @@ class avrBitbangLedStrip
 	end(uint16_t count = 0) __attribute__ ((always_inline));
 
 
+private:
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Display the array of pixels at the current position in the
-	/// LED strip.
+	/// LED strip (does not reset the display).
 	/// @param[in] count  Number of pixels to send
 	/// @param[in] array  Pixel array of size equal or greater than count.
 	////////////////////////////////////////////////////////////////////////
-	private:
-	template <const uint8_t bitsPerPixel, class arrayClassF, class paletteClassF, class mapIntF>
+
+	/// @brief
+	/// send<bpp, pixel, palette, map>(numPix, array, palette, map)
+	/// Palette + Pixel Mapping implementation
+	template <const uint8_t bitsPerPixel,
+		 class arrayClassF,
+		 class paletteClassF,
+		 class mapIntF>
 	static inline void
-	send(const uint16_t count, const arrayClassF * array, const paletteClassF * palette, const mapIntF * map)
+	send(	const uint16_t count,
+		const arrayClassF * array,
+		const paletteClassF * palette,
+		const mapIntF * map)
 	__attribute__ ((always_inline));
 
-	template <class pixelClassF>
+	template <const uint8_t bitsPerPixel,
+		 class arrayClassF,
+		 class paletteClassF,
+		 class mapIntF>
 	static inline void
-	send(const uint16_t count, const pixelClassF * palette, const uint8_t * array)
+	send(	const uint16_t count,
+		const arrayClassF * array,
+		const uint8_t * redPalette,
+		const uint8_t * greenPalette,
+		const uint8_t * bluePalette,
+		const mapIntF * map)
 	__attribute__ ((always_inline));
 
+	/// @brief
+	/// send<paletteType>(numPix, palette, array)
+	// Palette implementation
+	template <class paletteClassF>
+	static inline void
+	send(	const uint16_t count,
+		const paletteClassF * palette,
+		const uint8_t * array)
+	__attribute__ ((always_inline));
+
+	/// @brief
+	/// send(numPix, array)
+	// Normal pixel implementation
 	template <class pixelClassF>
 	static inline void
 	send(const uint16_t count, const pixelClassF * array)
 	__attribute__ ((always_inline));
 
 
-	public:
+public:
 	////////////////////////////////////////////////////////////////////////
 	/// @brief
-	/// send(uint16_t count, pixelType * array);
-	///
 	/// Display the array of pixels at the current position in the LED strip
+	///
+	/// send(uint16_t count, pixelType * array);
 	///
 	/// @param[in] count  Number of pixels to send
 	/// @param[in] array  Pixel array of any supported type
@@ -567,21 +780,22 @@ class avrBitbangLedStrip
 	) {                                                                    \
 		send<_typeOut>(_countOut, (_typeOut *) array);                 \
 	} __attribute__ ((always_inline));
-	API_LIST;
+	SEND_AND_DRAW_API_LIST;
 #undef API_ENTRY
 
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief
-	/// send(uint16_t count, pixelType * array, uint8_t * map);
-	/// send(uint16_t count, pixelType * array, uint16_t * map);
-	///
-	/// Pixel Remapping:
+	/// Display with remapping.
 	/// Display the array of pixels at the current position in the LED strip
 	/// The pixels are remapped. The map[] tells the offset in the array[]
 	/// to read the color from. map[] entries correspond to the physical LED
 	/// position in the strip. The array[] entries correspond to the logical
 	/// pixels in the picture.
+	/// map[ledPos] = ArrayPixelIndex
+	///
+	/// send(uint16_t count, pixelType * array, uint8_t * map);
+	/// send(uint16_t count, pixelType * array, uint16_t * map);
 	///
 	/// @param[in] count  Number of pixels to send
 	/// @param[in] array  Pixel array of 16bit/pixel {r:5, g:6, b:5}
@@ -606,7 +820,7 @@ class avrBitbangLedStrip
 				map                                            \
 		);                                                             \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
 
 	// 16bit map
@@ -622,38 +836,72 @@ class avrBitbangLedStrip
 				NULL, map \
 		); \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief
-	/// send<N>(uint16_t count, uint8_t array, pixelType * palette);
-	/// send<N>(uint16_t count, uint16_t array, pixelType * palette);
-	/// send<N>(uint16_t count, uint8_t array, pixelType * palette, uint8_t map);
-	/// send<N>(uint16_t count, uint16_t array, pixelType * palette, uint16_t map);
+	/// Display with color palette and optional remapping.
 	///
 	/// Color Palette:
 	/// Display the array of pixels at the current position in the LED strip
-	/// The pixels use a color palette. The array[] holds N-bits for each
+	/// The pixels use a color palette. The array[] holds bpp-bits for each
 	/// pixel, the value represents a color index in the palette table.
+	/// array[arrayPixelIndex] = colorPaletteIndex
+	/// palette[colorPaletteIndex] = rgbColor
 	///
 	/// Pixel Remapping:
 	/// To read the color from. map[] entries correspond to the physical LED
 	/// position in the strip. The array[] entries correspond to the logical
 	/// pixels in the picture.
+	/// map[ledPos] = ArrayPixelIndex
+	/// 
+	/// @note The method will scan the map linearly, to extract the next
+	/// ArrayPixelIndex to read, get the colorPaletteIndex, and display the
+	/// color from palette[colorPaletteIndex]. This is done on the fly, so
+	/// it is slower than displaying a simple pixel array, but does not use
+	/// any more memory.
 	///
-	/// @param[in] N      Template parameter, number of bits per pixel.
+	/// Using a palette saves memory.
+	/// Memory use is sizeof(palette) + sizeof(map) + sizeof(array)
+	/// For N pixels, and bpp:
+	/// Memory use is 2^bpp * sizeof(pixel) + N + N * bpp/8
+	/// Example: 256 ws2812b pixels and 4 colors (2 bits per pixel)
+	/// 1 bit per pixel 2 * 3 + 256 + 256 / 8 =  6 + 256 + 32 = 294 bytes
+	/// 2 bit per pixel 4 * 3 + 256 + 256 / 4 = 12 + 256 + 64 = 332 bytes
+	/// 4 bit per pixel 16* 3 + 256 + 256 / 2 = 48 + 256 +128 = 432 bytes
+	/// 8 bit per pixel 256*3 + 256 + 256 / 1 =768 + 256 +256 =1280 bytes
+	/// A simple pixel array is                       3 * 256 = 768 bytes
+	/// A simple pixel array with remapping is  256 + 3 * 256 =1024 bytes
+	///
+	/// Example: 1024 ws2812b pixels palette only
+	/// 1 bpp   2 * 3 + 1024 * 1 / 8 =   6 +  128 =  134 bytes
+	/// 2 bpp   4 * 3 + 1024 * 2 / 8 =  12 +  256 =  268 bytes
+	/// 4 bpp  16 * 3 + 1024 * 4 / 8 =  48 +  512 =  560 bytes
+	/// 8 bpp 256 * 3 + 1024 * 8 / 8 = 768 + 1024 = 1792 bytes
+	/// A simple pixel array is          3 * 1024 = 3072 bytes
+	///
+	/// send<bpp>(count, uint8_t  array, pixelType * palette);
+	/// send<bpp>(count, uint16_t array, pixelType * palette);
+	/// send<bpp>(count, uint16_t array, uint8_t * redPalette,
+	///        uint8_t * greenPalette, uint8_t * bluePalette);
+	/// send<bpp>(count, uint8_t  array, pixelType * palette, uint8_t  map);
+	/// send<bpp>(count, uint16_t array, pixelType * palette, uint16_t map);
+	/// send<bpp>(count, uint16_t array, uint8_t * redPalette,
+	///        uint8_t * greenPalette, uint8_t * bluePalette, uint16_t map);
+	///
+	/// @param[in] bpp    Template parameter, number of bits per pixel.
 	///                   Valid values: 1, 2, 4 or 8 bits per pixel, which
 	///                   correspond to 2, 4, 16 and 256 color palettes
 	/// @param[in] count  Number of pixels to send
-	/// @param[in] array  Pixel array of N bits per pixel
+	/// @param[in] array  Pixel array of bpp bits per pixel
 	/// @param[in] map    (optional) Remapping. map[LEDindex] = pixelOffset
 	///
 	/// @note A palette array does not need to be fully populated. It just
 	///         needs to have a pixel color defined for the colors in use.
 	////////////////////////////////////////////////////////////////////////
 
-	// 8bit map
+	// 8bit map (max 256 pixels)
 #define API_ENTRY(_countOut, _typeIn, _typeOut)                                \
 	template <const uint8_t bitsPerPixel>                                  \
 	static inline void send(                                               \
@@ -669,8 +917,32 @@ class avrBitbangLedStrip
 				map                                            \
 		);                                                             \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
+
+	/*
+#define API_ENTRY(_countOut, _typeIn, _typeOut)                                \
+	template <const uint8_t bitsPerPixel>                                  \
+	static inline void sendX(                                               \
+			const uint16_t count,                                  \
+			const uint8_t * array,                                 \
+			const uint8_t * redPalette,                            \
+			const uint8_t * greenPalette,                          \
+			const uint8_t * bluePalette,                           \
+			uint8_t * map = NULL                                   \
+	) {                                                                    \
+		send<bitsPerPixel, uint8_t, _typeOut, uint8_t>(                \
+				_countOut,                                     \
+				array,                                         \
+				redPalette,                                    \
+				greenPalette,                                  \
+				bluePalette,                                   \
+				map                                            \
+		);                                                             \
+	} __attribute__ ((always_inline));
+	SEND_AND_DRAW_API_LIST
+#undef API_ENTRY
+*/
 
 	// 16 bit map
 #define API_ENTRY(_countOut, _typeIn, _typeOut)                                \
@@ -688,7 +960,7 @@ class avrBitbangLedStrip
 				map                                            \
 		);                                                             \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
 
 
@@ -713,7 +985,7 @@ class avrBitbangLedStrip
 		send(count, array); \
 		end(); \
 	} __attribute__ ((always_inline)); 
-	API_LIST;
+	SEND_AND_DRAW_API_LIST;
 #undef API_ENTRY
 
 
@@ -745,7 +1017,7 @@ class avrBitbangLedStrip
 		send(count, array, NULL, map); \
 		end(); \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
 
 	// 16bit map
@@ -755,7 +1027,7 @@ class avrBitbangLedStrip
 		send(count, array, NULL, map); \
 		end(); \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
 
 	////////////////////////////////////////////////////////////////////////
@@ -791,10 +1063,10 @@ class avrBitbangLedStrip
 	template <const uint8_t bitsPerPixel> \
 	static inline void draw(const uint16_t count, const uint8_t * array, const _typeIn * palette, uint8_t * map = NULL) { \
 		begin(); \
-		send(count, array, palette, map); \
+		send<bitsPerPixel>(count, array, palette, map); \
 		end(); \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
 
 	// 16 bit map
@@ -802,58 +1074,67 @@ class avrBitbangLedStrip
 	template <const uint8_t bitsPerPixel> \
 	static inline void draw(const uint16_t count, const uint16_t * array, const _typeIn * palette, uint16_t * map = NULL) { \
 		begin(); \
-		send(count, array, palette, map); \
+		send<bitsPerPixel>(count, array, palette, map); \
 		end(); \
 	} __attribute__ ((always_inline));
-	API_LIST
+	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
 };
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Class methods definition
+/// Class definition
 ////////////////////////////////////////////////////////////////////////////////
 
-////////////////////////////////////////////////////////////////////////////////
-// Constructor
-////////////////////////////////////////////////////////////////////////////////
+/// @brief Counts number of pixels sent (for apa-102 refresh)
+/// Static because must count all pixels sent from multiple class instances
+/// on a given port (ok to overestimate if we write mulitple ports)
 template<FAB_TDEF>
-uint16_t avrBitbangLedStrip<FAB_TVAR>::pixelsDisplayed = 0;
+uint16_t fab_led<FAB_TVAR>::pixelsDisplayed = 0;
 
+/// @brief Save interrupt vector
 template<FAB_TDEF>
-uint8_t avrBitbangLedStrip<FAB_TVAR>::oldSREG = SREG;
+uint8_t fab_led<FAB_TVAR>::oldSREG = SREG;
 
+////////////////////////////////////////////////////////////////////////////////
+/// @brief Default constructor
+////////////////////////////////////////////////////////////////////////////////
 template<FAB_TDEF>
-avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
+fab_led<FAB_TVAR>::fab_led()
 {
 
+	// Cofigure the port as output, grounded to low state
 	// Digital out pin mode
 	// bitSet(portDDR, dataPortPin);
 	// DDR? |= 1U << dataPortPin;
 	switch (protocol) {
-		case TWO_PORT_SPLIT_BITBANG:
-		case TWO_PORT_INTLV_BITBANG:
-			// Init two ports as out, set to low state
-			SET_DDR_HIGH(dataPortId,  dataPortPin);
-			SET_DDR_HIGH(clockPortId, clockPortPin);
-			SET_PORT_LOW(dataPortId,  dataPortPin);
-			SET_PORT_LOW(clockPortId, clockPortPin);
+		case BITBANG_WS_1PORT:
+			SET_DDR_PIN_HIGH(dataPortId, dataPortPin);
+			SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 			break;
-		case EIGHT_PORT_BITBANG:
-			FAB_DDR(dataPortId, 0xFF); // all pins out
-			FAB_PORT(dataPortId, 0x00); // all pins low
+		case BITBANG_WS_SPLIT2PORTS:
+		case BITBANG_WS_INTLV2PORTS:
+			// Data and Clock are both used as data ports
+			SET_DDR_PIN_HIGH(dataPortId,  dataPortPin);
+			SET_DDR_PIN_HIGH(clockPortId, clockPortPin);
+			SET_PORT_PIN_LOW(dataPortId,  dataPortPin);
+			SET_PORT_PIN_LOW(clockPortId, clockPortPin);
 			break;
-		case SPI_BITBANG:
-			// Init both ports as out
-			SET_DDR_HIGH(dataPortId, dataPortPin);
-			SET_DDR_HIGH(clockPortId, clockPortPin);
+		case BITBANG_WS_8PORTS:
+			// Take over all 8 bits of the port
+			SET_DDR_BYTE(dataPortId, 0xFF);  // all pins out
+			SET_PORT_BYTE(dataPortId, 0x00); // all pins low
+			break;
+		case BITBANG_SPI:
+		case HARWARE_SPI:
+			// Use Data and Clock pins
+			SET_DDR_PIN_HIGH(dataPortId, dataPortPin);
+			SET_DDR_PIN_HIGH(clockPortId, clockPortPin);
 			// SPI: Reset LED strip to accept a refresh
-			spiSoftwareSendFrame(32, false);
+			bitbangSpi_Flatline(32, false);
 			break;
 		default:
-			// Init data port as out, set to low state
-			SET_DDR_HIGH(dataPortId, dataPortPin);
-			SET_PORT_LOW(dataPortId, dataPortPin);
+			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
 			break;
 	}
 };
@@ -865,14 +1146,14 @@ avrBitbangLedStrip<FAB_TVAR>::avrBitbangLedStrip()
 template<FAB_TDEF>
 template <void printChar(const char *),void printInt(uint32_t)>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::debug(void)
+fab_led<FAB_TVAR>::debug(void)
 {
 #ifndef DISABLE_DEBUG_METHOD
-	printChar("\nclass avrBitbangLedStrip<...>\n");
+	printChar("\nclass fab_led<...>\n");
 
 	printInt(CYCLES_PER_SEC/1000000);
 	printChar("MHz CPU, ");
-	printInt(NANOSECONDS(1000));
+	printInt(NSEC_PER_CYCLE(1000));
 	printChar(" picoseconds per cycle\n");
 
 	printChar("ONE  HIGH=");
@@ -961,28 +1242,28 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 	}
 
 	switch(protocol) {
-		case ONE_PORT_BITBANG:
+		case BITBANG_WS_1PORT:
 			printChar("ONE-PORT (bitbang)");
 			break;
-		case TWO_PORT_SPLIT_BITBANG:
+		case BITBANG_WS_SPLIT2PORTS:
 			printChar("TWO-PORT-SPLIT (bitbang)");
 			break;
-		case TWO_PORT_INTLV_BITBANG:
+		case BITBANG_WS_INTLV2PORTS:
 			printChar("TWO-PORT-INTERLEAVED (bitbang)");
 			break;
-		case EIGHT_PORT_BITBANG:
-			printChar("HEIGHT-PORT (bitbang)");
+		case BITBANG_WS_8PORTS:
+			printChar("EIGHT-PORT (bitbang)");
 			break;
-		case ONE_PORT_PWM:
+		case PWM_1PORT:
 			printChar("ONE-PORT (PWM)");
 			break;
-		case ONE_PORT_UART:
+		case UART_1PORT:
 			printChar("ONE-PORT (UART)");
 			break;
-		case SPI_BITBANG:
+		case BITBANG_SPI:
 			printChar("SPI (bitbang)");
 			break;
-		case SPI_HARDWARE:
+		case HARWARE_SPI:
 			printChar("SPI (hardware)");
 			break;
 		default:
@@ -998,44 +1279,47 @@ avrBitbangLedStrip<FAB_TVAR>::debug(void)
 ////////////////////////////////////////////////////////////////////////////////
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::sendBytes(const uint16_t count, const uint8_t * array)
+fab_led<FAB_TVAR>::sendBytes(const uint16_t count, const uint8_t * array)
 {
 	switch (protocol) {
-		case ONE_PORT_BITBANG:
-			onePortSoftwareSendBytes(count, array);
+		case BITBANG_WS_1PORT:
+			bitbang1PortWs_SendBytes(count, array);
 			break;
-		case TWO_PORT_SPLIT_BITBANG:
-		case TWO_PORT_INTLV_BITBANG:
+		case BITBANG_WS_SPLIT2PORTS:
+		case BITBANG_WS_INTLV2PORTS:
 			// Note: the function will detect and handle modes I and S
-			twoPortSoftwareSendBytes(count, array);
+			bitbang2portWs_SendBytes(count, array);
 			break;
-		case EIGHT_PORT_BITBANG:
-			eightPortSoftwareSendBytes(count, array);
+		case BITBANG_WS_8PORTS:
+			bitbang8PortWs_SendBytes(count, array);
 			break;
-		case SPI_BITBANG:
-			spiSoftwareSendBytes(count, array);
+		case BITBANG_SPI:
+			bitbangSpi_SendBytes(count, array);
+			break;
+		default:
+			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
 			break;
 	}
 }
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendFrame(const uint16_t count, bool high)
+fab_led<FAB_TVAR>::bitbangSpi_Flatline(const uint16_t numBits, bool high)
 {
 	if (high) {
-		SET_PORT_HIGH(dataPortId, dataPortPin);
+		SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
 	} else {
-		SET_PORT_LOW(dataPortId, dataPortPin);
+		SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 	}
-	for(uint16_t c = 0; c < count; c++) {
-		SET_PORT_LOW(clockPortId, clockPortPin);
-		SET_PORT_HIGH(clockPortId, clockPortPin);
+	for(uint16_t c = 0; c < numBits; c++) {
+		SET_PORT_PIN_LOW(clockPortId, clockPortPin);
+		SET_PORT_PIN_HIGH(clockPortId, clockPortPin);
 	}
 }
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+fab_led<FAB_TVAR>::bitbangSpi_SendBytes(const uint16_t count, const uint8_t * array)
 {
 	for(uint16_t cnt = 0; cnt < count; ++cnt) {
 		const uint8_t val = array[cnt];
@@ -1043,13 +1327,13 @@ avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendBytes(const uint16_t count, const u
 		for(int8_t b=7; b>=0; b--) {
 			const bool bit = (val>>b) & 0x1;
  			if (bit) {
-				SET_PORT_HIGH(dataPortId, dataPortPin);
+				SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
 			} else {
-				SET_PORT_LOW(dataPortId, dataPortPin);
+				SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 			}
 			// Latch the value in the LED
-			SET_PORT_LOW(clockPortId, clockPortPin);
-			SET_PORT_HIGH(clockPortId, clockPortPin);
+			SET_PORT_PIN_LOW(clockPortId, clockPortPin);
+			SET_PORT_PIN_HIGH(clockPortId, clockPortPin);
 		}
 
 	}
@@ -1058,17 +1342,17 @@ avrBitbangLedStrip<FAB_TVAR>::spiSoftwareSendBytes(const uint16_t count, const u
 /// @brief sends the array split across two ports each having half the LED strip to illuminate.
 /// To achieve this, we repurpose the clock port used for SPI as a second data port.
 /// We support two protocols:
-/// TWO_PORT_SPLIT_BITBANG: The array is split into 2 halves sent each sent to one of the ports
-/// TWO_PORT_INTLV_BITBANG: The array is interleaved and each pixel of 3 byte is sent to the next port
+/// BITBANG_WS_SPLIT2PORTS: The array is split into 2 halves sent each sent to one of the ports
+/// BITBANG_WS_INTLV2PORTS: The array is interleaved and each pixel of 3 byte is sent to the next port
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+fab_led<FAB_TVAR>::bitbang2portWs_SendBytes(const uint16_t count, const uint8_t * array)
 {
 	// If split mode, we send a block of half size
-	const uint16_t blockSize = (protocol == TWO_PORT_SPLIT_BITBANG) ? count/2 : count;
+	const uint16_t blockSize = (protocol == BITBANG_WS_SPLIT2PORTS) ? count/2 : count;
 
 	// Stride is two for interlacing to jump pixels going to the other port
-	const uint8_t stride = (protocol == TWO_PORT_SPLIT_BITBANG) ? 1 : 2;
+	const uint8_t stride = (protocol == BITBANG_WS_SPLIT2PORTS) ? 1 : 2;
 	const uint8_t increment = stride * stripBPP;
 
 	// Loop to scan all pixels, potentially skipping every other pixel, or scanning 1/2 the pixels
@@ -1081,26 +1365,26 @@ avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, con
 
 				volatile bool isbitDhigh = array[pos] & mask;
 	
-				volatile bool isbitChigh = (protocol == TWO_PORT_SPLIT_BITBANG) ?
+				volatile bool isbitChigh = (protocol == BITBANG_WS_SPLIT2PORTS) ?
 					array[pos + blockSize] & mask : // split: pixel is blockSize away.
 					array[pos + stripBPP] & mask;        // interleaved: pixel is next one.
 
-				if (isbitDhigh) SET_PORT_HIGH(dataPortId, dataPortPin);
-				if (isbitChigh) SET_PORT_HIGH(clockPortId, clockPortPin);
+				if (isbitDhigh) SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
+				if (isbitChigh) SET_PORT_PIN_HIGH(clockPortId, clockPortPin);
 
 				if (!isbitDhigh) {
-					SET_PORT_HIGH(dataPortId, dataPortPin);
+					SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
 					DELAY_CYCLES(high0 - sbiCycles);
-					SET_PORT_LOW(dataPortId, dataPortPin);
+					SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 				}
 				if (!isbitChigh) {
-					SET_PORT_HIGH(clockPortId, clockPortPin);
+					SET_PORT_PIN_HIGH(clockPortId, clockPortPin);
 					DELAY_CYCLES(high0 - sbiCycles);
-					SET_PORT_LOW(clockPortId, clockPortPin);
+					SET_PORT_PIN_LOW(clockPortId, clockPortPin);
 				}
 				DELAY_CYCLES(high1 - 2*sbiCycles);
-				SET_PORT_LOW(dataPortId, dataPortPin);
-				SET_PORT_LOW(clockPortId, clockPortPin);
+				SET_PORT_PIN_LOW(dataPortId, dataPortPin);
+				SET_PORT_PIN_LOW(clockPortId, clockPortPin);
 				DELAY_CYCLES(low1 - 2*cbiCycles);
 			}
 		}
@@ -1110,7 +1394,7 @@ avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, con
 #if 0
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+fab_led<FAB_TVAR>::bitbang2portWs_SendBytes(const uint16_t count, const uint8_t * array)
 {
 	const uint16_t blockSize = count/2;
 
@@ -1120,24 +1404,24 @@ avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, con
 			const bool isbitDhigh = array[0*blockSize + pos] & mask;
 			const bool isbitChigh = array[1*blockSize + pos] & mask;
 
-			if (isbitDhigh) SET_PORT_HIGH(dataPortId, dataPortPin);
-			if (isbitChigh) SET_PORT_HIGH(clockPortId, clockPortPin);
+			if (isbitDhigh) SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
+			if (isbitChigh) SET_PORT_PIN_HIGH(clockPortId, clockPortPin);
 
 			if (!isbitDhigh) {
-				SET_PORT_HIGH(dataPortId, dataPortPin);
+				SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
 				//DELAY_CYCLES(high0 - sbiCycles);
 				DELAY_CYCLES(0);
-				SET_PORT_LOW(dataPortId, dataPortPin);
+				SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 			}
 			if (!isbitChigh) {
-				SET_PORT_HIGH(clockPortId, clockPortPin);
+				SET_PORT_PIN_HIGH(clockPortId, clockPortPin);
 				//DELAY_CYCLES(high0 - sbiCycles);
 				DELAY_CYCLES(0);
-				SET_PORT_LOW(clockPortId, clockPortPin);
+				SET_PORT_PIN_LOW(clockPortId, clockPortPin);
 			}
 			DELAY_CYCLES(0);
-			SET_PORT_LOW(dataPortId, dataPortPin);
-			SET_PORT_LOW(clockPortId, clockPortPin);
+			SET_PORT_PIN_LOW(dataPortId, dataPortPin);
+			SET_PORT_PIN_LOW(clockPortId, clockPortPin);
 			DELAY_CYCLES(0);
 		}
 	}
@@ -1147,7 +1431,7 @@ avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, con
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+fab_led<FAB_TVAR>::bitbang8PortWs_SendBytes(const uint16_t count, const uint8_t * array)
 {
 	const uint16_t blockSize __asm__("r14") = count / (clockPortPin - dataPortPin + 1) / stripBPP * stripBPP;
 
@@ -1303,13 +1587,13 @@ avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, c
 				}
 
 			// Set all HIGH, set LOW all zeros, set LOW zeros and ones.
-			FAB_PORT(dataPortId, onMask);
+			SET_PORT_BYTE(dataPortId, onMask);
 			DELAY_CYCLES(high0 - sbiCycles);
 
-			FAB_PORT(dataPortId, bitmask);
+			SET_PORT_BYTE(dataPortId, bitmask);
 			DELAY_CYCLES( high1 - high0 + sbiCycles);
 
-			FAB_PORT(dataPortId, 0x00);
+			SET_PORT_BYTE(dataPortId, 0x00);
 			// Estimate overhead of math above to ~ 20 cycles
 			DELAY_CYCLES(low0 - cbiCycles - 20);
 		}
@@ -1319,7 +1603,7 @@ avrBitbangLedStrip<FAB_TVAR>::eightPortSoftwareSendBytes(const uint16_t count, c
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, const uint8_t * array)
+fab_led<FAB_TVAR>::bitbang1PortWs_SendBytes(const uint16_t count, const uint8_t * array)
 {
 
 	for(uint16_t c=0; c < count; c++) {
@@ -1331,22 +1615,22 @@ avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, con
 				// Send a ONE
 
 				// HIGH with ASM sbi (2 words, 2 cycles)
-				SET_PORT_HIGH(dataPortId, dataPortPin);
+				SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
 				DELAY_CYCLES(high1 - sbiCycles);
 				//  LOW with ASM cbi (2 words, 2 cycles)
-				SET_PORT_LOW(dataPortId, dataPortPin);
+				SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
 				DELAY_CYCLES(low1 - cbiCycles);
 			} else {
 				// Send a ZERO
 
 				// HIGH with ASM sbi (2 words, 2 cycles)
-				SET_PORT_HIGH(dataPortId, dataPortPin);
+				SET_PORT_PIN_HIGH(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
 				DELAY_CYCLES(high0 - sbiCycles);
 				//  LOW with ASM cbi (2 words, 2 cycles)
-				SET_PORT_LOW(dataPortId, dataPortPin);
+				SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 				// Wait exact number of cycles specified
 				DELAY_CYCLES(low0 - cbiCycles);
 			}
@@ -1360,14 +1644,14 @@ avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, con
 ////////////////////////////////////////////////////////////////////////////////
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::clear(const uint16_t numPixels)
+fab_led<FAB_TVAR>::clear(const uint16_t numPixels)
 {
 	grey(numPixels, 0);
 }
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value)
+fab_led<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value)
 {
 	pixelClass p;
 
@@ -1389,42 +1673,60 @@ avrBitbangLedStrip<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::begin(void)
+fab_led<FAB_TVAR>::begin(void)
 {
-	if (protocol == SPI_BITBANG) {
-		// SPI: Send start frame of 32 bits set to zero to force refresh
-		spiSoftwareSendFrame(32, false);
-	} else {
-		// 1-wire: Delay next pixels to cause a refresh
-		delay(minMsRefresh);
- 		oldSREG = SREG;
-		// Disable interrupts.
-		__builtin_avr_cli();
+	switch (protocol) {
+		case BITBANG_WS_1PORT:
+		case BITBANG_WS_SPLIT2PORTS:
+		case BITBANG_WS_INTLV2PORTS:
+		case BITBANG_WS_8PORTS:
+			// 1-wire: Delay next pixels to cause a refresh
+			delay(minMsRefresh);
+ 			oldSREG = SREG;
+			// Disable interrupts.
+			__builtin_avr_cli();
+			break;
+		case BITBANG_SPI:
+			// SPI: Send start frame of 32 bits set to zero to force refresh
+			bitbangSpi_Flatline(32, false);
+			break;
+		default:
+			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
+			break;
 	}
 }
 
 template<FAB_TDEF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::end(uint16_t count)
+fab_led<FAB_TVAR>::end(uint16_t count)
 {
-	if (protocol == SPI_BITBANG) {
-		// User overrides number of pixels tracked (rare)
-		if (count) {
-			pixelsDisplayed = count;
-		}
-		// Send end frame equal to 1/2 bit per pixel sent.
-		spiSoftwareSendFrame((++pixelsDisplayed)/2, true);
-		pixelsDisplayed = 0;
-	} else {
-		// Restore interrupts.
- 		SREG = oldSREG;
+	switch (protocol) {
+		case BITBANG_WS_1PORT:
+		case BITBANG_WS_SPLIT2PORTS:
+		case BITBANG_WS_INTLV2PORTS:
+		case BITBANG_WS_8PORTS:
+			// Restore interrupts.
+ 			SREG = oldSREG;
+			break;
+		case BITBANG_SPI:
+			// User overrides number of pixels tracked (rare)
+			if (count) {
+				pixelsDisplayed = count;
+			}
+			// Send end frame equal to 1/2 bit per pixel sent.
+			bitbangSpi_Flatline((1+pixelsDisplayed)/2, true);
+			pixelsDisplayed = 0;
+			break;
+		default:
+			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
+			break;
 	}
 }
 
 template<FAB_TDEF>
 template <class pixelClassF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::send(
+fab_led<FAB_TVAR>::send(
 		const uint16_t numPixels,
 		const pixelClassF * array)
 {
@@ -1433,7 +1735,7 @@ avrBitbangLedStrip<FAB_TVAR>::send(
 		sendBytes(numPixels * stripBPP, (uint8_t *) array);
 	} else {
 		// Create a native pixel for buffer
-		pixelClass p = {};
+		pixelClass p = pixelClass();
 		uint8_t * pRaw = (uint8_t *) & p;
 		// initialize special non-zero byte
 		if (pixelClass::type & PT_BXXX) {
@@ -1465,25 +1767,79 @@ avrBitbangLedStrip<FAB_TVAR>::send(
 			sendBytes(stripBPP, (uint8_t *) &p);
 		}
 	}
-	if (protocol == SPI_BITBANG) {
-		pixelsDisplayed += numPixels;
+	switch (protocol) {
+		case BITBANG_WS_1PORT:
+		case BITBANG_WS_SPLIT2PORTS:
+		case BITBANG_WS_INTLV2PORTS:
+		case BITBANG_WS_8PORTS:
+			break;
+		case BITBANG_SPI:
+			pixelsDisplayed += numPixels;
+			break;
+		default:
+			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
+			break;
 	}
 }
 
 
 // The remap is optional. When it is used the remap array represents the physical
-// LEDs of the LED strip, and holds the index in array[] of the color.
+// layout of the LED strip, and holds the index in array[] of the color.
 template<FAB_TDEF>
 template <const uint8_t bitsPerPixel, class arrayClassF, class paletteClassF, class mapIntF>
 inline void
-avrBitbangLedStrip<FAB_TVAR>::send(
+fab_led<FAB_TVAR>::send(
 		const uint16_t count,
 		const arrayClassF * array,   // uint8_t if palette, else pixelClassF
 		const paletteClassF * palette, // any custom pixelClassF, but not uint8_t
 		const mapIntF * map)         // use uint8_t for <256 pixels, else uint16_t
 {
 	// Support only palettes with 2, 4, 16 or 256 colors
-	STATIC_ASSERT( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
+		bitsPerPixel == 4 || bitsPerPixel == 8,
+		Unsupported_bits_per_pixel_palette);
+
+	const mapIntF iMax = (const mapIntF) count;
+
+	for (mapIntF i = 0; i < iMax; i++) {
+		// Remapped index in array is index of the next pixel to push.
+		// Pixels are pushed in order of the LED strip.
+		const mapIntF ri = (map != NULL) ? map[i] : i;
+		uint8_t ci = 0;
+
+		// If palette is null, then it's only a remap. ArrayClassF must be a color
+		if (palette == NULL) {
+			send(1, (paletteClassF *) &array[ri]);
+			continue;
+		}
+
+		// Extract the N-bit color index in order of LED strip using remap
+		ci = PIgetPixel<bitsPerPixel>(array, ri);
+
+		// Get the color/pixel to send. Without palette, the array is the pixel
+		const paletteClassF * pixel =  (paletteClassF *) &palette[ci];
+
+		// Draw pixel by pixel
+		send(1, pixel);
+	}
+}
+
+
+// The remap is optional. When it is used the remap array represents the physical
+// layout of the LED strip, and holds the index in array[] of the color.
+template<FAB_TDEF>
+template <const uint8_t bitsPerPixel, class arrayClassF, class paletteClassF, class mapIntF>
+inline void
+fab_led<FAB_TVAR>::send(
+		const uint16_t count,
+		const arrayClassF * array,   // uint8_t if palette, else pixelClassF
+		const uint8_t * redPalette, // any custom pixelClassF, but not uint8_t
+		const uint8_t * greenPalette, // any custom pixelClassF, but not uint8_t
+		const uint8_t * bluePalette, // any custom pixelClassF, but not uint8_t
+		const mapIntF * map)         // use uint8_t for <256 pixels, else uint16_t
+{
+	// Support only palettes with 2, 4, 16 or 256 colors
+	static_assert( bitsPerPixel == 1 || bitsPerPixel == 2 ||
 		bitsPerPixel == 4 || bitsPerPixel == 8,
 		Unsupported_bits_per_pixel_palette);
 
@@ -1496,15 +1852,16 @@ avrBitbangLedStrip<FAB_TVAR>::send(
 		uint8_t ci = 0;
 
 		// Extract the N-bit color index via bitmasks
-		if (palette != NULL) {
-			ci = GET_PIXEL(array, ri, bitsPerPixel);
-		}
+		ci = PIgetPixel<bitsPerPixel>(array, ri);
 
 		// Get the color/pixel to send. Without palette, the array is the pixel
-		const paletteClassF * pixel =  (palette != NULL) ?  (paletteClassF *) &palette[ci] :  (paletteClassF *) &array[ri];
+		const paletteClassF pixel;
+	       	pixel.r = (redPalette != NULL) ?  redPalette[ci] : 0;
+	       	pixel.g = (greenPalette != NULL) ?  greenPalette[ci] : 0;
+	       	pixel.b = (bluePalette != NULL) ?  bluePalette[ci] : 0;
 
 		// Draw pixel by pixel
-		send(1, pixel);
+		send(1, &pixel);
 	}
 }
 
@@ -1514,6 +1871,28 @@ avrBitbangLedStrip<FAB_TVAR>::send(
 // Defines the actual LED timings
 // WS2811 2811B 2812B 2812S 2801 LEDs use similar protocols and timings
 ////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////
+// WS2811
+////////////////////////////////////////////////////////////////////////////////
+#define WS2811_1H_CY CYCLES(900)  // 650ns-950ns _----------__
+#define WS2811_1L_CY CYCLES(550)  // 250ns-550ns .    .    .
+#define WS2811_0H_CY CYCLES(200)  // 250ns-350ns _-----_______
+#define WS2811_0L_CY CYCLES(900)  // 650ns-950ns .    .    .
+#define WS2811_MS_REFRESH 50      // 50,000ns Minimum sleep time to reset LED strip
+#define WS2811_NS_RF 2000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
+
+#define FAB_TVAR_WS2811 WS2811_1H_CY, WS2811_1L_CY, WS2811_0H_CY, \
+	WS2811_0L_CY, WS2811_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
+template<avrLedStripPort dataPortId, uint8_t dataPortBit>
+class ws2811 : public fab_led<FAB_TVAR_WS2811>
+{
+	public:
+	ws2811() : fab_led<FAB_TVAR_WS2811>() {};
+	~ws2811() {};
+};
+#undef FAB_TVAR_WS2811
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1538,12 +1917,12 @@ avrBitbangLedStrip<FAB_TVAR>::send(
 #endif
 
 #define FAB_TVAR_WS2812B WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, ONE_PORT_BITBANG
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
+class ws2812b : public fab_led<FAB_TVAR_WS2812B>
 {
 	public:
-	ws2812b() : avrBitbangLedStrip<FAB_TVAR_WS2812B>() {};
+	ws2812b() : fab_led<FAB_TVAR_WS2812B>() {};
 	~ws2812b() {};
 };
 #undef FAB_TVAR_WS2812B
@@ -1554,12 +1933,12 @@ class ws2812b : public avrBitbangLedStrip<FAB_TVAR_WS2812B>
 // The pixel array is split in two. Each port displays a half.
 ////////////////////////////////////////////////////////////////////////////////
 #define FAB_TVAR_WS2812BS WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, grb, TWO_PORT_SPLIT_BITBANG
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, grb, BITBANG_WS_SPLIT2PORTS
 template<avrLedStripPort dataPortId1, uint8_t dataPortBit1,avrLedStripPort dataPortId2, uint8_t dataPortBit2>
-class ws2812bs : public avrBitbangLedStrip<FAB_TVAR_WS2812BS>
+class ws2812bs : public fab_led<FAB_TVAR_WS2812BS>
 {
 	public:
-	ws2812bs() : avrBitbangLedStrip<FAB_TVAR_WS2812BS>() {};
+	ws2812bs() : fab_led<FAB_TVAR_WS2812BS>() {};
 	~ws2812bs() {};
 };
 #undef FAB_TVAR_WS2812BS
@@ -1569,12 +1948,12 @@ class ws2812bs : public avrBitbangLedStrip<FAB_TVAR_WS2812BS>
 // The pixel array is split in 8. Each port displays a portion.
 ////////////////////////////////////////////////////////////////////////////////
 #define FAB_TVAR_WS2812B8S WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit1, dataPortId, dataPortBit2, grb, EIGHT_PORT_BITBANG
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit1, dataPortId, dataPortBit2, grb, BITBANG_WS_8PORTS
 template<avrLedStripPort dataPortId, uint8_t dataPortBit1, uint8_t dataPortBit2>
-class ws2812b8s : public avrBitbangLedStrip<FAB_TVAR_WS2812B8S>
+class ws2812b8s : public fab_led<FAB_TVAR_WS2812B8S>
 {
 	public:
-	ws2812b8s() : avrBitbangLedStrip<FAB_TVAR_WS2812B8S>() {};
+	ws2812b8s() : fab_led<FAB_TVAR_WS2812B8S>() {};
 	~ws2812b8s() {};
 };
 #undef FAB_TVAR_WS2812B8S
@@ -1586,12 +1965,12 @@ class ws2812b8s : public avrBitbangLedStrip<FAB_TVAR_WS2812B8S>
 // other portdisplays the even pixels.
 ////////////////////////////////////////////////////////////////////////////////
 #define FAB_TVAR_WS2812BI WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, grb, TWO_PORT_INTLV_BITBANG
+	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, grb, BITBANG_WS_INTLV2PORTS
 template<avrLedStripPort dataPortId1, uint8_t dataPortBit1,avrLedStripPort dataPortId2, uint8_t dataPortBit2>
-class ws2812bi : public avrBitbangLedStrip<FAB_TVAR_WS2812BI>
+class ws2812bi : public fab_led<FAB_TVAR_WS2812BI>
 {
 	public:
-	ws2812bi() : avrBitbangLedStrip<FAB_TVAR_WS2812BI>() {};
+	ws2812bi() : fab_led<FAB_TVAR_WS2812BI>() {};
 	~ws2812bi() {};
 };
 #undef FAB_TVAR_WS2812BI
@@ -1607,12 +1986,12 @@ class ws2812bi : public avrBitbangLedStrip<FAB_TVAR_WS2812BI>
 #define WS2812_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
 #define WS2812_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_WS2812 WS2812_1H_CY, WS2812_1L_CY, WS2812_0H_CY, \
-	WS2812_0L_CY, WS2812_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, ONE_PORT_BITBANG
+	WS2812_0L_CY, WS2812_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class ws2812 : public avrBitbangLedStrip<FAB_TVAR_WS2812>
+class ws2812 : public fab_led<FAB_TVAR_WS2812>
 {
 	public:
-	ws2812() : avrBitbangLedStrip<FAB_TVAR_WS2812>() {};
+	ws2812() : fab_led<FAB_TVAR_WS2812>() {};
 	~ws2812() {};
 };
 #undef FAB_TVAR_WS2812
@@ -1628,12 +2007,12 @@ class ws2812 : public avrBitbangLedStrip<FAB_TVAR_WS2812>
 #define APA104_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
 #define APA104_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_APA104 APA104_1H_CY, APA104_1L_CY, APA104_0H_CY, \
-	APA104_0L_CY, APA104_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, ONE_PORT_BITBANG
+	APA104_0L_CY, APA104_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class apa104 : public avrBitbangLedStrip<FAB_TVAR_APA104>
+class apa104 : public fab_led<FAB_TVAR_APA104>
 {
 	public:
-	apa104() : avrBitbangLedStrip<FAB_TVAR_APA104>() {};
+	apa104() : fab_led<FAB_TVAR_APA104>() {};
 	~apa104() {};
 };
 #undef FAB_TVAR_APA104
@@ -1650,12 +2029,12 @@ class apa104 : public avrBitbangLedStrip<FAB_TVAR_APA104>
 #define APA106_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
 #define APA106_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_APA106 APA106_1H_CY, APA106_1L_CY, APA106_0H_CY, \
-	APA106_0L_CY, APA106_MS_REFRESH, dataPortId, dataPortBit, A, 0, rgb, ONE_PORT_BITBANG
+	APA106_0L_CY, APA106_MS_REFRESH, dataPortId, dataPortBit, A, 0, rgb, BITBANG_WS_1PORT
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class apa106 : public avrBitbangLedStrip<FAB_TVAR_APA106>
+class apa106 : public fab_led<FAB_TVAR_APA106>
 {
 	public:
-	apa106() : avrBitbangLedStrip<FAB_TVAR_APA106>() {};
+	apa106() : fab_led<FAB_TVAR_APA106>() {};
 	~apa106() {};
 };
 #undef FAB_TVAR_APA106
@@ -1673,12 +2052,12 @@ class apa106 : public avrBitbangLedStrip<FAB_TVAR_APA106>
 #define SK6812_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
 #define SK6812_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_SK6812 SK6812_1H_CY, SK6812_1L_CY, SK6812_0H_CY, \
-	SK6812_0L_CY, SK6812_MS_REFRESH, dataPortId, dataPortBit, A, 0, rgbw, ONE_PORT_BITBANG
+	SK6812_0L_CY, SK6812_MS_REFRESH, dataPortId, dataPortBit, A, 0, rgbw, BITBANG_WS_1PORT
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class sk6812 : public avrBitbangLedStrip<FAB_TVAR_SK6812>
+class sk6812 : public fab_led<FAB_TVAR_SK6812>
 {
 	public:
-	sk6812() : avrBitbangLedStrip<FAB_TVAR_SK6812>() {};
+	sk6812() : fab_led<FAB_TVAR_SK6812>() {};
 	~sk6812() {};
 };
 #undef FAB_TVAR_SK6812
@@ -1697,12 +2076,12 @@ class sk6812 : public avrBitbangLedStrip<FAB_TVAR_SK6812>
 #define SK6812B_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
 #define SK6812B_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_SK6812B SK6812B_1H_CY, SK6812B_1L_CY, SK6812B_0H_CY, \
-	SK6812B_0L_CY, SK6812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, grbw, ONE_PORT_BITBANG
+	SK6812B_0L_CY, SK6812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, grbw, BITBANG_WS_1PORT
 template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class sk6812b : public avrBitbangLedStrip<FAB_TVAR_SK6812B>
+class sk6812b : public fab_led<FAB_TVAR_SK6812B>
 {
 	public:
-	sk6812b() : avrBitbangLedStrip<FAB_TVAR_SK6812B>() {};
+	sk6812b() : fab_led<FAB_TVAR_SK6812B>() {};
 	~sk6812b() {};
 };
 #undef FAB_TVAR_SK6812B
@@ -1718,12 +2097,12 @@ class sk6812b : public avrBitbangLedStrip<FAB_TVAR_SK6812B>
 #define APA102_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
 #define APA102_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #define FAB_TVAR_APA102 APA102_1H_CY, APA102_1L_CY, APA102_0H_CY, \
-	APA102_0L_CY, APA102_MS_REFRESH, dataPortId, dataPortBit, clockPortId, clockPortBit, hbgr, SPI_BITBANG
+	APA102_0L_CY, APA102_MS_REFRESH, dataPortId, dataPortBit, clockPortId, clockPortBit, hbgr, BITBANG_SPI
 template<avrLedStripPort dataPortId, uint8_t dataPortBit, avrLedStripPort clockPortId, uint8_t clockPortBit>
-class apa102 : public avrBitbangLedStrip<FAB_TVAR_APA102>
+class apa102 : public fab_led<FAB_TVAR_APA102>
 {
 	public:
-	apa102() : avrBitbangLedStrip<FAB_TVAR_APA102>() {};
+	apa102() : fab_led<FAB_TVAR_APA102>() {};
 	~apa102() {};
 };
 #undef FAB_TVAR_APA102

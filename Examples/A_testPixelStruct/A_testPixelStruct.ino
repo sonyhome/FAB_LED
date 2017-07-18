@@ -87,6 +87,10 @@ grb  grbPixels[NUM_PIXELS] = {};
 // Demo display on WS2812B LED strip
 void showWs2812b(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  myWs2812.clear(1000);
+  delay(500);
+
   // Show rgb array (red)
   myWs2812.draw(NUM_PIXELS,rgbPixels);
   // Wait to have display lit for a while
@@ -109,6 +113,10 @@ void showWs2812b(void)
 // Demo display on APA104 LED strip
 void showApa102(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  myApa102.clear(1000);
+  delay(500);
+
   // Show rgb array (red)
   myApa102.draw(NUM_PIXELS,rgbPixels);
   // Wait to have display lit for a while
@@ -130,6 +138,10 @@ void showApa102(void)
 // Demo display on APA104 LED strip
 void showApa104(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  myApa104.clear(1000);
+  delay(500);
+
   // Show rgb array (red)
   myApa104.draw(NUM_PIXELS,rgbPixels);
   // Wait to have display lit for a while
@@ -151,6 +163,10 @@ void showApa104(void)
 // Demo display on APA106 LED strip
 void showApa106(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  myApa106.clear(1000);
+  delay(500);
+
   // Show rgb array (red)
   myApa106.draw(NUM_PIXELS,rgbPixels);
   // Wait to have display lit for a while
@@ -172,6 +188,10 @@ void showApa106(void)
 // Demo display on RGB SK6812 LED strip
 void showSk6812(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  mySk6812.clear(1000);
+  delay(500);
+
   // Show rgb array (red)
   mySk6812.draw(NUM_PIXELS,rgbPixels);
   // Wait to have display lit for a while
@@ -193,6 +213,10 @@ void showSk6812(void)
 // Demo display on GRB SK6812 LED strip
 void showSk6812b(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  mySk6812b.clear(1000);
+  delay(500);
+
   // Show rgb array (red)
   mySk6812b.draw(NUM_PIXELS,rgbPixels);
   // Wait to have display lit for a while
@@ -221,6 +245,10 @@ void showSequence(void)
 {
   myStripClass myStrip;
 
+  // Init the LEDs, all off, up to 1000 LEDs.
+  myStrip.clear(1000);
+  delay(500);
+
   // Show rgb array (red)
   myStrip.draw(NUM_PIXELS,rgbPixels);
   // Wait to have display lit for a while
@@ -246,16 +274,16 @@ void showSequence(void)
 // same colors, so the end result should be to
 // see R then G then B then W. For fun, ws2812b
 // LED white is done with R=G=B=16, and white on
-// sk6812 with R=G=B=0 and W=48.
-// There will be pixCut WS2812B pixels (12) and
-// NUM_PIXELS - pixCut (30) Sk6812 pixels.
+// sk6812 with R=G=B=16 and W=48.
+// There will be pixCut WS2812B pixels and
+// (NUM_PIXELS - pixCut) Sk6812 pixels.
 // If the LED configuration does not match the code,
 // the pixels will have multiple colors and more or
-// fewer LEDs will light up. This is because one
-// LED strip uses 3 bytes per pixels, and the other
-// uses 4 bytes per pixel.
+// fewer LEDs will light up. This is because ws812b
+// uses 3 bytes per pixels, and sk6812b uses 4 bytes
+// per pixel.
 
-const uint16_t pixCut = 12;
+const uint16_t pixCut = 2;
 
 template<class T> void lukasDraw(uint16_t count, T * array)
 {
@@ -267,14 +295,18 @@ template<class T> void lukasDraw(uint16_t count, T * array)
 
   myWs2812.begin();
 
-  myWs2812.send(pixCut, rgbPixels);
-  mySk6812b.send(count - pixCut, &rgbPixels[pixCut]);
+  myWs2812.send(pixCut, array);
+  mySk6812.send(count - pixCut, &array[pixCut]);
 
   myWs2812.end(count);
 }
 
 void lukas(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  myWs2812.clear(1000);
+  delay(500);
+
   lukasDraw<rgb>(NUM_PIXELS, rgbPixels);
   delay(1000);
 
@@ -284,13 +316,6 @@ void lukas(void)
   lukasDraw<rgbw>(NUM_PIXELS, rgbwPixels);
   delay(1000);
 
-  // Test grbw array
-  for (int i= pixCut; i < NUM_PIXELS; i++) {
-    grbwPixels[i].r = 0;
-    grbwPixels[i].g = 0;
-    grbwPixels[i].b = 0;
-    grbwPixels[i].w = 16*3;
-  }
   lukasDraw<grbw>(NUM_PIXELS, grbwPixels);
   delay(1000);
 }
@@ -307,14 +332,18 @@ template<class T> void mBladeDraw(uint16_t count, T * array)
 
   myWs2812.begin();
 
-  myWs2812.send(count-1,&array[0]);
-  myApa106.send(1,&array[NUM_PIXELS-1]);
+  myWs2812.send(pixCut,array);
+  myApa106.send(count - pixCut,&array[pixCut]);
 
   myWs2812.end(count);
 }
 
 void mBlade(void)
 {
+  // Init the LEDs, all off, up to 1000 LEDs.
+  myWs2812.clear(1000);
+  delay(500);
+
   // Draw the pixels, sk strip is after ws strip hence pushed first.
   mBladeDraw<rgb>(NUM_PIXELS,rgbPixels);
   delay(1000);
@@ -323,6 +352,9 @@ void mBlade(void)
   delay(1000);
   
   mBladeDraw<rgbw>(NUM_PIXELS,rgbwPixels);
+  delay(1000);
+
+  mBladeDraw<grbw>(NUM_PIXELS, grbwPixels);
   delay(1000);
 }
 
@@ -342,6 +374,7 @@ void setup()
     grbwPixels[i].r = 16;
     grbwPixels[i].g = 16;
     grbwPixels[i].b = 16;
+    grbwPixels[i].w = 16*3;
   }
 }
 
@@ -352,19 +385,16 @@ void setup()
 ////////////////////////////////////////////////////////////////////////////////
 void loop()
 {
-  // Init the LEDs, all off, up to 1000 LEDs.
-  mySk6812.clear(1000);
-  delay(500);
-
   // Comment all function calls here EXCEPT for the one that matches your LED
   // strip if you want to see the right color sequence of red, green, blue:
-//  showWs2812b();
+  showSequence< ws2812b<D,6> >();
+  mBlade();
+  lukas();
+
+  showWs2812b();
   showApa102();
-//  showApa104();
-//  showApa106();
-//  showSk6812();
-//  showSk6812b();
-//  showSequence< sk6812b<D,6> >();
-//  lukas();
-//  mBlade();
+  showApa104();
+  showApa106();
+  showSk6812();
+  showSk6812b();
 }
