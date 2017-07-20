@@ -44,7 +44,8 @@
 /// These simplify access to a pixel byte array, or even to send typed pixels
 /// to the LED strip, as the programmer directly access pixel colors by name.
 /// Each struct has a *static* "type" field used to process the pixel properly
-/// when it is passed as a template type.
+/// by the fab_led class when it is passed as a template type. The values of
+/// the type is one of these definitions.
 ////////////////////////////////////////////////////////////////////////////////
 
 /// @brief Pixel Type Colors byte order
@@ -59,10 +60,11 @@
 
 /// @brief Pixel Type Extra Properties, 0 none, 2 invalid.
 #define PT_XTRA   0b00000111 // Mask for extra byte(s) defined below
-#define PT_XXXW   0b00000001 // Postfix white brightness (4-color sk6812 RGBW)
-#define PT_WXXX   0b00000010 // Prefix white pixel brightness (uint32_t)
-#define PT_BXXX   0b00000011 // Prefix 5bit brightness level (APA102 0b111bbbbb)
-#define PT_R5G6B5 0b00000100 // uint16_t with 5~6 bits per color
+#define PT_XXXW   0b00000001 // Postfix 8bit white brightness (4-colors)
+#define PT_WXXX   0b00000010 // Prefix  8bit white pixel brightness (4-colors)
+#define PT_BXXX   0b00000011 // Prefix  5bit brightness level (APA102 0b111bbbbb)
+#define PT_X16b   0b00000100 // uint16_t with 5r6g5b bits per color
+
 /// @brief SK6812 has a white LED
 #define PT_HAS_WHITE(v)		((((v) & PT_XTRA) == PT_XXXW) || \
 				 (((v) & PT_XTRA) == PT_WXXX))
@@ -76,9 +78,9 @@ typedef struct _rgb {
 	static const uint8_t type = PT_RGB;
 	union {
 		struct {
-			union { uint8_t r; uint8_t red; };
-			union { uint8_t g; uint8_t green; };
-			union { uint8_t b; uint8_t blue; };
+			union { uint8_t r; uint8_t red;};
+			union { uint8_t g; uint8_t green;};
+			union { uint8_t b; uint8_t blue;};
 		};
 		uint8_t raw[3];
 	};
@@ -87,25 +89,40 @@ typedef struct _rgb {
 /// @brief apa104, ws2812 native color order pixel array
 typedef struct _grb {
 	static const uint8_t type = PT_GRB;
-	union { uint8_t g; uint8_t green; };
-	union { uint8_t r; uint8_t red; };
-	union { uint8_t b; uint8_t blue; };
+	union {
+		struct {
+			union { uint8_t g; uint8_t green;};
+			union { uint8_t r; uint8_t red;};
+			union { uint8_t b; uint8_t blue;};
+		};
+		uint8_t raw[3];
+	};
 } grb;
 
 typedef struct _bgr {
 	static const uint8_t type = PT_BGR;
-	union { uint8_t b; uint8_t blue; };
-	union { uint8_t g; uint8_t green; };
-	union { uint8_t r; uint8_t red; };
+	union {
+		struct {
+			union { uint8_t b; uint8_t blue;};
+			union { uint8_t g; uint8_t green;};
+			union { uint8_t r; uint8_t red;};
+		};
+		uint8_t raw[3];
+	};
 } bgr;
 
 /// @brief rgbw sk6812 native color order pixel array
 typedef struct _rgbw {
 	static const uint8_t type = PT_RGB | PT_XXXW;
-	union { uint8_t r; uint8_t red; };
-	union { uint8_t g; uint8_t green; };
-	union { uint8_t b; uint8_t blue; };
-	union { uint8_t w; uint8_t white; };
+	union {
+		struct {
+			union { uint8_t r; uint8_t red;};
+			union { uint8_t g; uint8_t green;};
+			union { uint8_t b; uint8_t blue;};
+			union { uint8_t w; uint8_t white;};
+		};
+		uint8_t raw[4];
+	};
 } rgbw;
 
 /// @brief uint32_t conversion
@@ -115,39 +132,60 @@ typedef struct _rgbw {
 /// user code less portable across led strip types.
 typedef struct _wrgb {
 	static const uint8_t type = PT_RGB | PT_WXXX;
-	union { uint8_t w; uint8_t white; };
-	union { uint8_t r; uint8_t red; };
-	union { uint8_t g; uint8_t green; };
-	union { uint8_t b; uint8_t blue; };
+	union {
+		struct {
+			union { uint8_t w; uint8_t white;};
+			union { uint8_t r; uint8_t red;};
+			union { uint8_t g; uint8_t green;};
+			union { uint8_t b; uint8_t blue;};
+		};
+		uint8_t raw[4];
+	};
 } wrgb;
 
 /// @brief  grbw sk6812 native color order pixel array
 typedef struct _grbw {
 	static const uint8_t type = PT_GRB | PT_XXXW;
-	union { uint8_t g; uint8_t green; };
-	union { uint8_t r; uint8_t red; };
-	union { uint8_t b; uint8_t blue; };
-	union { uint8_t w; uint8_t white; };
+	union {
+		struct {
+			union { uint8_t g; uint8_t green;};
+			union { uint8_t r; uint8_t red;};
+			union { uint8_t b; uint8_t blue;};
+			union { uint8_t w; uint8_t white;};
+		};
+		uint8_t raw[4];
+	};
 } grbw;
 
 /// @brief apa102 native color order pixel array
 typedef struct _hbgr {
 	static const uint8_t type = PT_BGR | PT_BXXX;
-	union { uint8_t B; uint8_t brightness;
-	        uint8_t w; uint8_t white;
-	        uint8_t h; uint8_t header; };
-	union { uint8_t b; uint8_t blue; };
-	union { uint8_t g; uint8_t green; };
-	union { uint8_t r; uint8_t red; };
+	union {
+		struct {
+			union { uint8_t B; uint8_t brightness;
+	        		uint8_t w; uint8_t white;
+				uint8_t h;};
+			union { uint8_t b; uint8_t blue;};
+			union { uint8_t g; uint8_t green;};
+			union { uint8_t r; uint8_t red;};
+		};
+		uint8_t raw[4];
+	};
 } hbgr;
 
 /// @brief compressed 16 bit pixel with 32/64/32 levels per color.
 /// Actual brightness is multiplied by 4 or 8.
 typedef struct _r5g6b5 {
-	static const uint8_t type = PT_R5G6B5;
-	uint16_t r : 5;
-	uint16_t g : 6;
-	uint16_t b : 5;
+	static const uint8_t type = PT_X16b;
+	union {
+		struct {
+			uint16_t r : 5;
+			uint16_t g : 6;
+			uint16_t b : 5;
+		};
+		uint8_t raw[2];
+		uint16_t raw16;
+	};
 } r5g6b5;
 
 /// @brief type to declare a pixel array where each pixel is an index to
@@ -164,6 +202,7 @@ typedef union _paletteColor {
 	       uint8_t p0:4, p1:4;
        } bpp4;
        uint8_t bpp8;
+       uint8_t raw;
 } paletteColor;
 
 /// @brief Lists all the pixel types suported by the API
@@ -349,27 +388,35 @@ enum avrLedStripPort {
 
 /// @brief Type for low-level SendBytes method to send data to the LED port
 enum ledProtocol {
-	// WS2812 APA104 SK6812 and similar data port only serial protocols
-	BITBANG_WS_1PORT = 1,	// Support LED with single data line, no clock,
+	// ONE-WIRE PROTOCOL: Data only bit serial port, with time sensitive signal
+	// WS2812 APA104 SK6812 and similar
+	BITBANG_1WI_1P = 1,	// Support LED with single data line, no clock,
 				// software bit-banging
-	BITBANG_WS_SPLIT2PORTS = 2, // Same, but update two ports in parallel,
+	BITBANG_1WI_S2P = 2, // Same, but update two ports in parallel,
 				// sending 1st half the array to one port, and
 				// the other half to the other
-	BITBANG_WS_INTLV2PORTS = 3, // Same, but update two ports in parallel,
+	BITBANG_1WI_I2P = 3, // Same, but update two ports in parallel,
 				// interleaving the pixels sent to each port
-	BITBANG_WS_8PORTS = 4,  // Split array in up to 8 blocks each sent to
+	BITBANG_1WI_8P = 4,  // Split array in up to 8 blocks each sent to
 				// respective port bits
-	PWM_1PORT = 5,          // Not implemented, use hardware PWM
-	UART_1PORT = 6,         // Not implemented, use UART serial port
+	PWM_1P = 5,          // Not implemented, use hardware PWM
+	UART_1P = 6,         // Not implemented, use UART serial port
 
-	// APA102 WS2801 and similar clock+data protocols
-	BITBANG_SPI = 7,        // APA-102 and any LED with data and clock line
+	// SPI PROTOCOL: Data + clock ports, data bit latched when clock goes H->L
+	// APA102 WS2801 and similar
+	// Specific versions handle specific quirks of each protocol like sending
+	// checksum or end bits to display properly. Ideally should be bitmask fields
+	HARDWARE_SPI = 7,       // Not implemented
+	BITBANG_SPI = 8,        // LEDs with data and clock line
 				// Since clock is sent, not sensitive to CPU
 				// frequency nor interrupts
-	HARWARE_SPI = 8,       // Not implemented
-	UNSUPPORTED = 9
+	BITBANG_SPI102 = 9,     // APA-102 LED with data and clock line and brightness
+	BITBANG_SPI9813 = 10,   // P9813 LED with data and clock line and cksum
+
+	UNSUPPORTED = 11 
 };
-#define PROTOCOL_SPI BITBANG_SPI
+// Minimum index of SPI protocol entries, below are 1WI
+#define PROTOCOL_SPI HARDWARE_SPI
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -526,7 +573,7 @@ const int cbiCycles = 2;
 ////////////////////////////////////////////////////////////////////////////////
 // Base class defining LED strip operations allowed.
 ////////////////////////////////////////////////////////////////////////////////
-static const uint8_t blank[3] = {128,128,128};
+//static const uint8_t blank[3] = {128,128,128};
 
 /// @brief template parameters
 ///	int16_t high1               Number of cycles high for logical one
@@ -1108,25 +1155,27 @@ fab_led<FAB_TVAR>::fab_led()
 	// bitSet(portDDR, dataPortPin);
 	// DDR? |= 1U << dataPortPin;
 	switch (protocol) {
-		case BITBANG_WS_1PORT:
+		case BITBANG_1WI_1P:
 			SET_DDR_PIN_HIGH(dataPortId, dataPortPin);
 			SET_PORT_PIN_LOW(dataPortId, dataPortPin);
 			break;
-		case BITBANG_WS_SPLIT2PORTS:
-		case BITBANG_WS_INTLV2PORTS:
+		case BITBANG_1WI_S2P:
+		case BITBANG_1WI_I2P:
 			// Data and Clock are both used as data ports
 			SET_DDR_PIN_HIGH(dataPortId,  dataPortPin);
 			SET_DDR_PIN_HIGH(clockPortId, clockPortPin);
 			SET_PORT_PIN_LOW(dataPortId,  dataPortPin);
 			SET_PORT_PIN_LOW(clockPortId, clockPortPin);
 			break;
-		case BITBANG_WS_8PORTS:
+		case BITBANG_1WI_8P:
 			// Take over all 8 bits of the port
 			SET_DDR_BYTE(dataPortId, 0xFF);  // all pins out
 			SET_PORT_BYTE(dataPortId, 0x00); // all pins low
 			break;
 		case BITBANG_SPI:
-		case HARWARE_SPI:
+		case BITBANG_SPI9813:
+		case BITBANG_SPI102:
+		case HARDWARE_SPI:
 			// Use Data and Clock pins
 			SET_DDR_PIN_HIGH(dataPortId, dataPortPin);
 			SET_DDR_PIN_HIGH(clockPortId, clockPortPin);
@@ -1242,28 +1291,32 @@ fab_led<FAB_TVAR>::debug(void)
 	}
 
 	switch(protocol) {
-		case BITBANG_WS_1PORT:
+		case BITBANG_1WI_1P:
 			printChar("ONE-PORT (bitbang)");
 			break;
-		case BITBANG_WS_SPLIT2PORTS:
+		case BITBANG_1WI_S2P:
 			printChar("TWO-PORT-SPLIT (bitbang)");
 			break;
-		case BITBANG_WS_INTLV2PORTS:
+		case BITBANG_1WI_I2P:
 			printChar("TWO-PORT-INTERLEAVED (bitbang)");
 			break;
-		case BITBANG_WS_8PORTS:
+		case BITBANG_1WI_8P:
 			printChar("EIGHT-PORT (bitbang)");
 			break;
-		case PWM_1PORT:
+		case PWM_1P:
 			printChar("ONE-PORT (PWM)");
 			break;
-		case UART_1PORT:
+		case UART_1P:
 			printChar("ONE-PORT (UART)");
 			break;
 		case BITBANG_SPI:
 			printChar("SPI (bitbang)");
+		case BITBANG_SPI9813:
+			printChar("P9813 SPI (bitbang)");
+		case BITBANG_SPI102:
+			printChar("APA-102 SPI (bitbang)");
 			break;
-		case HARWARE_SPI:
+		case HARDWARE_SPI:
 			printChar("SPI (hardware)");
 			break;
 		default:
@@ -1282,18 +1335,20 @@ inline void
 fab_led<FAB_TVAR>::sendBytes(const uint16_t count, const uint8_t * array)
 {
 	switch (protocol) {
-		case BITBANG_WS_1PORT:
+		case BITBANG_1WI_1P:
 			bitbang1PortWs_SendBytes(count, array);
 			break;
-		case BITBANG_WS_SPLIT2PORTS:
-		case BITBANG_WS_INTLV2PORTS:
+		case BITBANG_1WI_S2P:
+		case BITBANG_1WI_I2P:
 			// Note: the function will detect and handle modes I and S
 			bitbang2portWs_SendBytes(count, array);
 			break;
-		case BITBANG_WS_8PORTS:
+		case BITBANG_1WI_8P:
 			bitbang8PortWs_SendBytes(count, array);
 			break;
 		case BITBANG_SPI:
+		case BITBANG_SPI9813:
+		case BITBANG_SPI102:
 			bitbangSpi_SendBytes(count, array);
 			break;
 		default:
@@ -1342,17 +1397,17 @@ fab_led<FAB_TVAR>::bitbangSpi_SendBytes(const uint16_t count, const uint8_t * ar
 /// @brief sends the array split across two ports each having half the LED strip to illuminate.
 /// To achieve this, we repurpose the clock port used for SPI as a second data port.
 /// We support two protocols:
-/// BITBANG_WS_SPLIT2PORTS: The array is split into 2 halves sent each sent to one of the ports
-/// BITBANG_WS_INTLV2PORTS: The array is interleaved and each pixel of 3 byte is sent to the next port
+/// BITBANG_1WI_S2P: The array is split into 2 halves sent each sent to one of the ports
+/// BITBANG_1WI_I2P: The array is interleaved and each pixel of 3 byte is sent to the next port
 template<FAB_TDEF>
 inline void
 fab_led<FAB_TVAR>::bitbang2portWs_SendBytes(const uint16_t count, const uint8_t * array)
 {
 	// If split mode, we send a block of half size
-	const uint16_t blockSize = (protocol == BITBANG_WS_SPLIT2PORTS) ? count/2 : count;
+	const uint16_t blockSize = (protocol == BITBANG_1WI_S2P) ? count/2 : count;
 
 	// Stride is two for interlacing to jump pixels going to the other port
-	const uint8_t stride = (protocol == BITBANG_WS_SPLIT2PORTS) ? 1 : 2;
+	const uint8_t stride = (protocol == BITBANG_1WI_S2P) ? 1 : 2;
 	const uint8_t increment = stride * stripBPP;
 
 	// Loop to scan all pixels, potentially skipping every other pixel, or scanning 1/2 the pixels
@@ -1365,7 +1420,7 @@ fab_led<FAB_TVAR>::bitbang2portWs_SendBytes(const uint16_t count, const uint8_t 
 
 				volatile bool isbitDhigh = array[pos] & mask;
 	
-				volatile bool isbitChigh = (protocol == BITBANG_WS_SPLIT2PORTS) ?
+				volatile bool isbitChigh = (protocol == BITBANG_1WI_S2P) ?
 					array[pos + blockSize] & mask : // split: pixel is blockSize away.
 					array[pos + stripBPP] & mask;        // interleaved: pixel is next one.
 
@@ -1428,7 +1483,16 @@ fab_led<FAB_TVAR>::bitbang2portWs_SendBytes(const uint16_t count, const uint8_t 
 }
 #endif
 
-
+/// @brief
+/// Bitbang up to 8 port pins to control up to 8 LED strips in parallel.
+/// Each LED strip receives data from a separate part of the pixel array which
+/// is split in N portions if there are N LED strips (max 8)
+///
+/// Timing is critical so the bits sent out are pipelines with the array byte reads.
+/// Each iteration we load one byte from one of the N array locations into a specific
+/// register and fetch one bit for each port from N registers, and write all N bits
+/// to the port. This must be done before the LED bit resets (~ 1200ns).
+/// 16MHz=6.25ns would be 200 cycles?!
 template<FAB_TDEF>
 inline void
 fab_led<FAB_TVAR>::bitbang8PortWs_SendBytes(const uint16_t count, const uint8_t * array)
@@ -1586,15 +1650,15 @@ fab_led<FAB_TVAR>::bitbang8PortWs_SendBytes(const uint16_t count, const uint8_t 
 					break;
 				}
 
-			// Set all HIGH, set LOW all zeros, set LOW zeros and ones.
-			SET_PORT_BYTE(dataPortId, onMask);
+			SET_PORT_BYTE(dataPortId, onMask); // Set high all lines
 			DELAY_CYCLES(high0 - sbiCycles);
 
-			SET_PORT_BYTE(dataPortId, bitmask);
+			SET_PORT_BYTE(dataPortId, bitmask); // Set 0 lines low 
 			DELAY_CYCLES( high1 - high0 + sbiCycles);
 
-			SET_PORT_BYTE(dataPortId, 0x00);
-			// Estimate overhead of math above to ~ 20 cycles
+			// We should only clear the bits we control but that implies p &= offMask operation
+			SET_PORT_BYTE(dataPortId, 0x00); // Set 1 lines low
+			// Estimate overhead of math before port IO to ~ 20 cycles
 			DELAY_CYCLES(low0 - cbiCycles - 20);
 		}
 	}
@@ -1676,10 +1740,10 @@ inline void
 fab_led<FAB_TVAR>::begin(void)
 {
 	switch (protocol) {
-		case BITBANG_WS_1PORT:
-		case BITBANG_WS_SPLIT2PORTS:
-		case BITBANG_WS_INTLV2PORTS:
-		case BITBANG_WS_8PORTS:
+		case BITBANG_1WI_1P:
+		case BITBANG_1WI_S2P:
+		case BITBANG_1WI_I2P:
+		case BITBANG_1WI_8P:
 			// 1-wire: Delay next pixels to cause a refresh
 			delay(minMsRefresh);
  			oldSREG = SREG;
@@ -1687,6 +1751,8 @@ fab_led<FAB_TVAR>::begin(void)
 			__builtin_avr_cli();
 			break;
 		case BITBANG_SPI:
+		case BITBANG_SPI9813:
+		case BITBANG_SPI102:
 			// SPI: Send start frame of 32 bits set to zero to force refresh
 			bitbangSpi_Flatline(32, false);
 			break;
@@ -1701,14 +1767,16 @@ inline void
 fab_led<FAB_TVAR>::end(uint16_t count)
 {
 	switch (protocol) {
-		case BITBANG_WS_1PORT:
-		case BITBANG_WS_SPLIT2PORTS:
-		case BITBANG_WS_INTLV2PORTS:
-		case BITBANG_WS_8PORTS:
+		case BITBANG_1WI_1P:
+		case BITBANG_1WI_S2P:
+		case BITBANG_1WI_I2P:
+		case BITBANG_1WI_8P:
 			// Restore interrupts.
  			SREG = oldSREG;
 			break;
 		case BITBANG_SPI:
+		case BITBANG_SPI9813:
+		case BITBANG_SPI102:
 			// User overrides number of pixels tracked (rare)
 			if (count) {
 				pixelsDisplayed = count;
@@ -1768,12 +1836,14 @@ fab_led<FAB_TVAR>::send(
 		}
 	}
 	switch (protocol) {
-		case BITBANG_WS_1PORT:
-		case BITBANG_WS_SPLIT2PORTS:
-		case BITBANG_WS_INTLV2PORTS:
-		case BITBANG_WS_8PORTS:
+		case BITBANG_1WI_1P:
+		case BITBANG_1WI_S2P:
+		case BITBANG_1WI_I2P:
+		case BITBANG_1WI_8P:
 			break;
 		case BITBANG_SPI:
+		case BITBANG_SPI9813:
+		case BITBANG_SPI102:
 			pixelsDisplayed += numPixels;
 			break;
 		default:
@@ -1866,34 +1936,6 @@ fab_led<FAB_TVAR>::send(
 }
 
 
-////////////////////////////////////////////////////////////////////////////////
-// Implementation classes for LED strip
-// Defines the actual LED timings
-// WS2811 2811B 2812B 2812S 2801 LEDs use similar protocols and timings
-////////////////////////////////////////////////////////////////////////////////
-
-
-////////////////////////////////////////////////////////////////////////////////
-// WS2811
-////////////////////////////////////////////////////////////////////////////////
-#define WS2811_1H_CY CYCLES(900)  // 650ns-950ns _----------__
-#define WS2811_1L_CY CYCLES(550)  // 250ns-550ns .    .    .
-#define WS2811_0H_CY CYCLES(200)  // 250ns-350ns _-----_______
-#define WS2811_0L_CY CYCLES(900)  // 650ns-950ns .    .    .
-#define WS2811_MS_REFRESH 50      // 50,000ns Minimum sleep time to reset LED strip
-#define WS2811_NS_RF 2000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-
-#define FAB_TVAR_WS2811 WS2811_1H_CY, WS2811_1L_CY, WS2811_0H_CY, \
-	WS2811_0L_CY, WS2811_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
-template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class ws2811 : public fab_led<FAB_TVAR_WS2811>
-{
-	public:
-	ws2811() : fab_led<FAB_TVAR_WS2811>() {};
-	~ws2811() {};
-};
-#undef FAB_TVAR_WS2811
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // WS2812B (default, mainstream)
@@ -1906,7 +1948,7 @@ class ws2811 : public fab_led<FAB_TVAR_WS2811>
 #define WS2812B_0L_CY CYCLES(650)  // 650ns-950ns .    .    .
 #define WS2812B_MS_REFRESH 50      // 50,000ns Minimum sleep time to reset LED strip
 #define WS2812B_NS_RF 2000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-#else
+
 // These are the more agressive bitbanging timings, note 0 and 1 have different durations
 #define WS2812B_1H_CY CYCLES(500)  // 6  7 10 _----------__
 #define WS2812B_1L_CY CYCLES(125)  // 2  2  4 .    .    .
@@ -1916,195 +1958,69 @@ class ws2811 : public fab_led<FAB_TVAR_WS2811>
 #define WS2812B_NS_RF 2000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
 #endif
 
-#define FAB_TVAR_WS2812B WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
-template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class ws2812b : public fab_led<FAB_TVAR_WS2812B>
-{
-	public:
-	ws2812b() : fab_led<FAB_TVAR_WS2812B>() {};
-	~ws2812b() {};
-};
-#undef FAB_TVAR_WS2812B
 
-
+///////////////////////////////////////////////////////////////////////////////
+// Implementation classes for LED strip
+// Defines the actual LED timings
+// WS2811 2811B 2812B 2812S 2801 LEDs use similar protocols and timings
 ////////////////////////////////////////////////////////////////////////////////
-// WS2812BS - Bitbang the pixels to two ports in parallel.
-// The pixel array is split in two. Each port displays a half.
-////////////////////////////////////////////////////////////////////////////////
-#define FAB_TVAR_WS2812BS WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, grb, BITBANG_WS_SPLIT2PORTS
-template<avrLedStripPort dataPortId1, uint8_t dataPortBit1,avrLedStripPort dataPortId2, uint8_t dataPortBit2>
-class ws2812bs : public fab_led<FAB_TVAR_WS2812BS>
-{
-	public:
-	ws2812bs() : fab_led<FAB_TVAR_WS2812BS>() {};
-	~ws2812bs() {};
-};
-#undef FAB_TVAR_WS2812BS
+/// @brief
+/// Define all the LED protocol classes for each LED_TYPE using macro magic.
+///
+/// The macro declares the class setting all the template constants.
+/// For example when NAME is ws2812b, that creates a class you can instantiate
+/// in your code as: ws2812b<D,6>.
+///
+/// @param
+/// NAME: Name of class
+/// TYPE: Flags defining custom properties for that LED type
+/// PIXEL: Native pixel type for that LED type (compared against the type
+///        used for your pixel array
+/// H1, L1, H0, L0: Timings in nano-seconds for bit banging (0 if unused)
+/// RESET: Minimum time in msec to idle the bus between display refreshes
+/// WIRE_COM: Wire communication protocol, to send the data across at low level
+/// DPID: LED data line port register ID (a letter from A to I)
+/// DPBIT: LED data line port bit (0 to 7)
+/// CPID: LED clock line port register ID (a letter from A to I)
+/// CPBIT: LED clock line port bit (0 to 7)
+///////////////////////////////////////////////////////////////////////////////
+#define LED_TYPE2(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, WIRE_COM) \
+	template<avrLedStripPort  dataPortId, uint8_t  dataPortBit>           \
+	class NAME : public fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET,dataPortId, dataPortBit, A, 0, PIXEL, WIRE_COM>                      \
+	{                                                                     \
+		public:                                                       \
+		NAME() : fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, dataPortId, dataPortBit, A, 0, PIXEL, WIRE_COM>() {};                   \
+		~NAME() {};                                                   \
+	};
 
-////////////////////////////////////////////////////////////////////////////////
-// WS2812B8S - Bitbang the pixels to eight ports in parallel.
-// The pixel array is split in 8. Each port displays a portion.
-////////////////////////////////////////////////////////////////////////////////
-#define FAB_TVAR_WS2812B8S WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId, dataPortBit1, dataPortId, dataPortBit2, grb, BITBANG_WS_8PORTS
-template<avrLedStripPort dataPortId, uint8_t dataPortBit1, uint8_t dataPortBit2>
-class ws2812b8s : public fab_led<FAB_TVAR_WS2812B8S>
-{
-	public:
-	ws2812b8s() : fab_led<FAB_TVAR_WS2812B8S>() {};
-	~ws2812b8s() {};
-};
-#undef FAB_TVAR_WS2812B8S
+#define LED_TYPE4(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, WIRE_COM) \
+	template<avrLedStripPort  dataPortId, uint8_t  dataPortBit,           \
+	         avrLedStripPort clockPortId, uint8_t clockPortBit>           \
+	class NAME : public fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET,dataPortId, dataPortBit, clockPortId, clockPortBit, PIXEL, WIRE_COM>                      \
+	{                                                                     \
+		public:                                                       \
+		NAME() : fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, dataPortId, dataPortBit, clockPortId, clockPortBit, PIXEL, WIRE_COM>() {};                   \
+		~NAME() {};                                                   \
+	};
 
+//#define LED_TEMPLATE_PARAMS CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, DPID, DPBIT, CPID, CPBIT, PIXEL, WIRE_COM
 
-////////////////////////////////////////////////////////////////////////////////
-// WS2812BI - Bitbang the pixels to two ports in parallel.
-// The pixels array is interleaved. One port displays the odd pixels, while the
-// other portdisplays the even pixels.
-////////////////////////////////////////////////////////////////////////////////
-#define FAB_TVAR_WS2812BI WS2812B_1H_CY, WS2812B_1L_CY, WS2812B_0H_CY, \
-	WS2812B_0L_CY, WS2812B_MS_REFRESH, dataPortId1, dataPortBit1, dataPortId2, dataPortBit2, grb, BITBANG_WS_INTLV2PORTS
-template<avrLedStripPort dataPortId1, uint8_t dataPortBit1,avrLedStripPort dataPortId2, uint8_t dataPortBit2>
-class ws2812bi : public fab_led<FAB_TVAR_WS2812BI>
-{
-	public:
-	ws2812bi() : fab_led<FAB_TVAR_WS2812BI>() {};
-	~ws2812bi() {};
-};
-#undef FAB_TVAR_WS2812BI
+///      (     NAME  ,     TYPE  ,PIXEL,  H1,  L1,  H0,  L0,RESET,   WIRE_COM     )
+LED_TYPE4(  apa102   ,  APA102   , hbgr,   0,   0,   0,   0,  84, BITBANG_SPI102  ) \
+LED_TYPE4(  ws2801   ,  WS2801   ,  bgr,   0,   0,   0,   0,  84, BITBANG_SPI     ) \
+LED_TYPE2(  sk6812   ,  SK6812   , rgbw,1210, 200, 200,1210,  84, BITBANG_1WI_1P  ) \
+LED_TYPE2(  sk6812b  ,  SK6812B  , grbw,1210, 200, 200,1210,  84, BITBANG_1WI_1P  ) \
+LED_TYPE2(  apa104   ,  APA104   , grb ,1210, 200, 200,1210,  50, BITBANG_1WI_1P  ) \
+LED_TYPE2(  apa106   ,  APA106   , rgb ,1210, 200, 200,1210,  50, BITBANG_1WI_1P  ) \
+LED_TYPE2(  ws2811   ,  WS2811   , grb , 900, 550, 200, 908,  50, BITBANG_1WI_1P  ) \
+LED_TYPE2(  ws2812b  ,  WS2812B  , grb , 500, 125, 125, 188,  20, BITBANG_1WI_1P  ) \
+LED_TYPE2(  ws2812   ,  WS2812   , grb , 550, 200, 200, 550,  50, BITBANG_1WI_1P  ) \
+LED_TYPE2(  ws2812std,  WS2812STD, grb , 650, 125, 125, 650,  50, BITBANG_1WI_1P  ) \
+LED_TYPE4(  ws2812bi ,  WS2812BI , grb , 550, 200, 200, 550,  50, BITBANG_1WI_I2P ) \
+LED_TYPE4(  ws2812bs ,  WS2812BS , grb , 550, 200, 200, 550,  50, BITBANG_1WI_S2P ) \
+LED_TYPE4(  ws2812b8 ,  WS2812B8 , grb , 500, 125, 125, 188,  20, BITBANG_1WI_8P  ) \
 
-
-////////////////////////////////////////////////////////////////////////////////
-// WS2812 (1st generation of LEDs)
-////////////////////////////////////////////////////////////////////////////////
-#define WS2812_1H_CY CYCLES(550)  // 500ns 550ns-850ns  _----------__
-#define WS2812_1L_CY CYCLES(200)  // 125ns 200ns-500ns  .    .    .
-#define WS2812_0H_CY CYCLES(200)  // 125ns 200ns-500ns  _-----_______
-#define WS2812_0L_CY CYCLES(550)  // 500ns 550ns-850ns  .    .    .
-#define WS2812_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
-#define WS2812_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-#define FAB_TVAR_WS2812 WS2812_1H_CY, WS2812_1L_CY, WS2812_0H_CY, \
-	WS2812_0L_CY, WS2812_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
-template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class ws2812 : public fab_led<FAB_TVAR_WS2812>
-{
-	public:
-	ws2812() : fab_led<FAB_TVAR_WS2812>() {};
-	~ws2812() {};
-};
-#undef FAB_TVAR_WS2812
-
-
-////////////////////////////////////////////////////////////////////////////////
-// APA104 (newer better defined timings)
-////////////////////////////////////////////////////////////////////////////////
-#define APA104_1H_CY CYCLES(1210) // 500ns 1210ns-1510ns _----------__
-#define APA104_1L_CY CYCLES(200)  // 125ns  200ns-500ns  .    .    .
-#define APA104_0H_CY CYCLES(200)  // 125ns  200ns-500ns  _-----_______
-#define APA104_0L_CY CYCLES(1210) // 500ns 1210ns-1510ns .    .    .
-#define APA104_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
-#define APA104_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-#define FAB_TVAR_APA104 APA104_1H_CY, APA104_1L_CY, APA104_0H_CY, \
-	APA104_0L_CY, APA104_MS_REFRESH, dataPortId, dataPortBit, A, 0, grb, BITBANG_WS_1PORT
-template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class apa104 : public fab_led<FAB_TVAR_APA104>
-{
-	public:
-	apa104() : fab_led<FAB_TVAR_APA104>() {};
-	~apa104() {};
-};
-#undef FAB_TVAR_APA104
-#define pl9823 apa104; 
-
-
-////////////////////////////////////////////////////////////////////////////////
-// APA106 (like APA104, but with LEDs ordered as RGB instead of GRB)
-////////////////////////////////////////////////////////////////////////////////
-#define APA106_1H_CY CYCLES(1210) // 500ns 1210ns-1510ns _----------__
-#define APA106_1L_CY CYCLES(200)  // 125ns  200ns-500ns  .    .    .
-#define APA106_0H_CY CYCLES(200)  // 125ns  200ns-500ns  _-----_______
-#define APA106_0L_CY CYCLES(1210) // 500ns 1210ns-1510ns .    .    .
-#define APA106_MS_REFRESH 50      //  50,000ns Minimum wait time to reset LED strip
-#define APA106_NS_RF 5000000      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-#define FAB_TVAR_APA106 APA106_1H_CY, APA106_1L_CY, APA106_0H_CY, \
-	APA106_0L_CY, APA106_MS_REFRESH, dataPortId, dataPortBit, A, 0, rgb, BITBANG_WS_1PORT
-template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class apa106 : public fab_led<FAB_TVAR_APA106>
-{
-	public:
-	apa106() : fab_led<FAB_TVAR_APA106>() {};
-	~apa106() {};
-};
-#undef FAB_TVAR_APA106
-
-
-
-////////////////////////////////////////////////////////////////////////////////
-// SK6812 (4 color RGBW LEDs, faster PWM frequency, updated timings)
-/// @note I need to use microsleep to not round up sleep to 1msec.
-////////////////////////////////////////////////////////////////////////////////
-#define SK6812_1H_CY CYCLES(1210) // 500ns 1210ns-1510ns _----------__
-#define SK6812_1L_CY CYCLES(200)  // 125ns  200ns-500ns  .    .    .
-#define SK6812_0H_CY CYCLES(200)  // 125ns  200ns-500ns  _-----_______
-#define SK6812_0L_CY CYCLES(1210) // 500ns 1210ns-1510ns .    .    .
-#define SK6812_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
-#define SK6812_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-#define FAB_TVAR_SK6812 SK6812_1H_CY, SK6812_1L_CY, SK6812_0H_CY, \
-	SK6812_0L_CY, SK6812_MS_REFRESH, dataPortId, dataPortBit, A, 0, rgbw, BITBANG_WS_1PORT
-template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class sk6812 : public fab_led<FAB_TVAR_SK6812>
-{
-	public:
-	sk6812() : fab_led<FAB_TVAR_SK6812>() {};
-	~sk6812() {};
-};
-#undef FAB_TVAR_SK6812
-
-
-
-
-////////////////////////////////////////////////////////////////////////////////
-// SK6812B (4 color GRBW LEDs, faster PWM frequency, updated timings)
-/// @note I need to use microsleep to not round up sleep to 1msec.
-////////////////////////////////////////////////////////////////////////////////
-#define SK6812B_1H_CY CYCLES(1210) // 500ns 1210ns-1510ns _----------__
-#define SK6812B_1L_CY CYCLES(200)  // 125ns  200ns-500ns  .    .    .
-#define SK6812B_0H_CY CYCLES(200)  // 125ns  200ns-500ns  _-----_______
-#define SK6812B_0L_CY CYCLES(1210) // 500ns 1210ns-1510ns .    .    .
-#define SK6812B_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
-#define SK6812B_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-#define FAB_TVAR_SK6812B SK6812B_1H_CY, SK6812B_1L_CY, SK6812B_0H_CY, \
-	SK6812B_0L_CY, SK6812B_MS_REFRESH, dataPortId, dataPortBit, A, 0, grbw, BITBANG_WS_1PORT
-template<avrLedStripPort dataPortId, uint8_t dataPortBit>
-class sk6812b : public fab_led<FAB_TVAR_SK6812B>
-{
-	public:
-	sk6812b() : fab_led<FAB_TVAR_SK6812B>() {};
-	~sk6812b() {};
-};
-#undef FAB_TVAR_SK6812B
-
-
-////////////////////////////////////////////////////////////////////////////////
-// APA-102 (3 color RGB LEDs, SPI protocol)
-////////////////////////////////////////////////////////////////////////////////
-#define APA102_1H_CY CYCLES(0) // Unused
-#define APA102_1L_CY CYCLES(0)  // Unused
-#define APA102_0H_CY CYCLES(0)  // Unused
-#define APA102_0L_CY CYCLES(0) // Unused
-#define APA102_MS_REFRESH 84      //  84,000ns Minimum wait time to reset LED strip
-#define APA102_NS_RF  833333      // Max refresh rate for all pixels to light up 2msec (LED PWM is 500Hz)
-#define FAB_TVAR_APA102 APA102_1H_CY, APA102_1L_CY, APA102_0H_CY, \
-	APA102_0L_CY, APA102_MS_REFRESH, dataPortId, dataPortBit, clockPortId, clockPortBit, hbgr, BITBANG_SPI
-template<avrLedStripPort dataPortId, uint8_t dataPortBit, avrLedStripPort clockPortId, uint8_t clockPortBit>
-class apa102 : public fab_led<FAB_TVAR_APA102>
-{
-	public:
-	apa102() : fab_led<FAB_TVAR_APA102>() {};
-	~apa102() {};
-};
-#undef FAB_TVAR_APA102
+#undef LED_TYPE
+#undef LED_TEMPLATE_PARAMS
 
 #endif // FAB_LED_H
