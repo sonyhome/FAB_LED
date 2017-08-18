@@ -27,11 +27,18 @@
 /// General definitions
 ////////////////////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////////////////////
 // This code is sensitive to optimizations if you want to cascade function calls,
-// so make the IDE compile at -O2 instead of -Os (size).
+// so make the IDE compile at -O2 (fast code) instead of -Os (size).
+////////////////////////////////////////////////////////////////////////////////
 #pragma GCC optimize ("-O2")
 
+
+////////////////////////////////////////////////////////////////////////////////
 // static_assert is a built-in C++ 11 assert that Arduino g++ does not implement
+// so we work around this by triggering an invalid char array size to make the
+// compiler error out at the given line
+////////////////////////////////////////////////////////////////////////////////
 #ifndef static_assert
 #define _STATIC_ASSERT(a,b) a##b
 #define static_assert(cond, key)	enum { _STATIC_ASSERT(key, __LINE__) = \
@@ -40,40 +47,128 @@
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// @brief typed pixel structures for every LED protocol supported.
-/// These simplify access to a pixel byte array, or even to send typed pixels
-/// to the LED strip, as the programmer directly access pixel colors by name.
-/// Each struct has a *static* "type" field used to process the pixel properly
-/// by the fab_led class when it is passed as a template type. The values of
-/// the type is one of these definitions.
+/// @brief LED PORT COMMUNICATION PROTOCOL list defines the protocol used to
+/// send bits on the port and the way this driver controls the port to be
+/// compatible with the protocol (the main method is bitbanging)
+/// ONE WIRE PROTOCOL: Data port, each bit is H->L, but 1 has long H, 0 short H
+/// and the LED samples at a given clock rate.
+/// SPI PROTOCOL: Data + clock ports, data bit latched when clock goes H->L
 ////////////////////////////////////////////////////////////////////////////////
+#define LED_PORT_COMMUNICATION_PROTOCOLS_LIST                                 \
+	LED_PORT_COMMUNICATION_PROTOCOL( 1, BITBANG_1WI_1P,                   \
+		       	"1-wire 1 port (bitbang)")                            \
+	LED_PORT_COMMUNICATION_PROTOCOL( 2, BITBANG_1WI_S2P,                  \
+			"1-wire 2 ports, split half (bitbang)")               \
+	LED_PORT_COMMUNICATION_PROTOCOL( 3, BITBANG_1WI_I2P,                  \
+			"1-wire 2 ports, split interleaved (bitbang)")        \
+	LED_PORT_COMMUNICATION_PROTOCOL( 4, BITBANG_1WI_8P,                   \
+		       	"1-wire 8 ports max split evenly (bitbang)")          \
+	LED_PORT_COMMUNICATION_PROTOCOL( 5, PWM_1P,                           \
+	       		"1-wire 1 port (hardware PWM)")                       \
+	LED_PORT_COMMUNICATION_PROTOCOL( 6, UART_1P,                          \
+			"1-wire 1 port (hardware serial UART)")               \
+                                                                              \
+	LED_PORT_COMMUNICATION_PROTOCOL( 7, BITBANG_SPI,                      \
+		    	"SPI data+clock port (bitbang)")                      \
+	LED_PORT_COMMUNICATION_PROTOCOL( 8, HARDWARE_SPI,                     \
+		     	"SPI data+clock port (hardware SPI)") 
 
-/// @brief Pixel Type Colors byte order
-#define PT_COL    0b11100000 // Mask for the 3-byte colors defined below
-#define PT_RGB    0b00100000
-#define PT_GRB    0b01000000
-#define PT_BGR    0b10000000
-//#define PT_RBG  0b11000000 // Unused yet
-//#define PT_GBR  0b10100000 // Unused yet
-//#define PT_BRG  0b01100000 // Unused yet
+// Minimum index of SPI protocol entries, below are 1WI
+#define PROTOCOL_SPI BITBANG_SPI
+
+/// @brief Type for low-level SendBytes method to send data to the LED port
+#define LED_PORT_COMMUNICATION_PROTOCOL(index, label, desc) label = index,
+enum letPortComm_t {
+	LED_PORT_COMMUNICATION_PROTOCOLS_LIST
+	UNSUPPORTED = 9
+};
+#undef LED_PORT_COMMUNICATION_PROTOCOL
+
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief LED type defines the physical properties of the LED/LED strip
+/// IT is in LED_TYPES_LIST macro because it helps define the classes and enum
+///      (     NAME  ,     TYPE  ,PIXEL,H1ns,L1ns,H0ns,L0ns,RSTus, PROTOCOL        )
+////////////////////////////////////////////////////////////////////////////////
+#define LED_TYPES_LIST                                                               \
+LED_TYPE2(  apa102   ,  APA102   , hbgr,   0,   0,   0,   0,   84, BITBANG_SPI     ) \
+LED_TYPE2(  ws2801   ,  WS2801   ,  bgr,   0,   0,   0,   0,   84, BITBANG_SPI     ) \
+LED_TYPE2(  sk9813   ,  SK9813   ,  bgr,   0,   0,   0,   0,   84, BITBANG_SPI     ) \
+LED_TYPE1(  sk6812   ,  SK6812   , rgbw,1210, 200, 200,1210,   84, BITBANG_1WI_1P  ) \
+LED_TYPE1(  sk6812b  ,  SK6812B  , grbw,1210, 200, 200,1210,   84, BITBANG_1WI_1P  ) \
+LED_TYPE1(  apa104   ,  APA104   , grb ,1210, 200, 200,1210,   50, BITBANG_1WI_1P  ) \
+LED_TYPE1(  apa106   ,  APA106   , rgb ,1210, 200, 200,1210,   50, BITBANG_1WI_1P  ) \
+LED_TYPE1(  ws2811   ,  WS2811   , rgb , 500, 125, 125, 188,   20, BITBANG_1WI_1P  ) \
+LED_TYPE1(  ws2812b  ,  WS2812B  , grb , 320,   0,   0, 128,    0, BITBANG_1WI_1P  ) \
+LED_TYPE1(  ws2812   ,  WS2812   , grb , 550, 200, 200, 550,   20, BITBANG_1WI_1P  ) \
+LED_TYPE1(  ws2812std,  WS2812STD, grb , 650, 125, 125, 650,   50, BITBANG_1WI_1P  ) \
+LED_TYPE2(  ws2812bi ,  WS2812BI , grb , 550, 200, 200, 550,    0, BITBANG_1WI_I2P ) \
+LED_TYPE2(  ws2812bs ,  WS2812BS , grb , 550, 200, 200, 550,    0, BITBANG_1WI_S2P ) \
+LED_TYPER(  ws2812b8 ,  WS2812B8 , grb , 500, 125, 125, 188,    0, BITBANG_1WI_8P  )
+
+// Enum specifying the LED type.
+#define LED_TYPE1(name, typeName, pixel, h1, l1, h0, l0,reset, protocol) typeName,
+#define LED_TYPE2(name, typeName, pixel, h1, l1, h0, l0,reset, protocol) typeName,
+#define LED_TYPER(name, typeName, pixel, h1, l1, h0, l0,reset, protocol) typeName,
+enum ledType_t
+{
+	LED_TYPES_LIST
+	UNKNOWN = 3
+};
+#undef LED_TYPE1
+#undef LED_TYPE2
+#undef LED_TYPER
+
+// Define native LED pixel types. A user can use it to have a pixel type native
+// to the LED they use. For example:
+// ws2818bPixel array[numPixels];
+#define TYPE_GEN(a, b) a ## b
+#define LED_TYPE1(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
+#define LED_TYPE2(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
+#define LED_TYPER(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
+LED_TYPES_LIST
+#undef LED_TYPE1
+#undef LED_TYPE2
+#undef LED_TYPER
+
+////////////////////////////////////////////////////////////////////////////////
+/// @brief pixel structure types for every LED protocol supported.
+/// The user manipulates arrays of these types for convenience. Each LED type
+/// has a native pixel type. The user can reference a color (r, red, etc.)
+/// without worrying what is the color order, or the raw bytes.
+/// FAB_LED will detect and allow pixel types mismatching the native LED pixel
+/// type, and transparently perform the conversion to display colors properly.
+///
+/// Each pixel type has a static "type" field used to process the pixel properly
+/// by the fab_led class when it is passed as a template type. The values of
+/// "type" is built with the following definitions.
+////////////////////////////////////////////////////////////////////////////////
+// Pixel Type: Colors byte order
+#define PT_RGB  0b00100000
+#define PT_GRB  0b01000000
+#define PT_BGR  0b10000000
+#define PT_RBG  0b11000000 // Unused yet
+#define PT_GBR  0b10100000 // Unused yet
+#define PT_BRG  0b01100000 // Unused yet
+/////// /////   ..XXXxxxxx
+#define PT_COL  0b11100000 // Mask for the 3-byte colors defined below
 #define PT_IS_SAME_COLOR_ORDER(a, b) ((a) & PT_COL == (b) & PT_COL)
-
-/// @brief Pixel Type Extra Properties, 0 none, 2 invalid.
-#define PT_XTRA   0b00000111 // Mask for extra byte(s) defined below
-#define PT_XXXW   0b00000001 // Postfix 8bit white brightness (4-colors)
-#define PT_WXXX   0b00000010 // Prefix  8bit white pixel brightness (4-colors)
-#define PT_BXXX   0b00000011 // Prefix  5bit brightness level (APA102 0b111bbbbb)
-#define PT_X16b   0b00000100 // uint16_t with 5r6g5b bits per color
-
-/// @brief SK6812 has a white LED
+/// Pixel Type: Extra Properties, 0 none, 2 invalid.
+#define PT_XXXW 0b00000001 // Postfix 8bit white brightness (4-colors)
+#define PT_WXXX 0b00000010 // Prefix  8bit white pixel brightness (4-colors)
+#define PT_BXXX 0b00000011 // Prefix  5bit brightness level (APA102 0b111bbbbb)
+#define PT_XCHK 0b00000100 // Prefix  8bit checksum (SK9814)
+/////// /////   ..xxxxxXXX
+#define PT_4BYT 0b00000111
+#define PT_BYTES_PER_PIXEL(v) (3 + (((v) & PT_4BYT) != 0))
 #define PT_HAS_WHITE(v)		((((v) & PT_XTRA) == PT_XXXW) || \
 				 (((v) & PT_XTRA) == PT_WXXX))
-/// @brief APA-102 has a global 5-bit brightness byte with top-3 bits set to 1
 #define PT_HAS_BRIGHT(v)	 (((v) & PT_XTRA) == PT_BXXX)
-/// @brief The math defines 3 or 4 byte per pixel only here:
-#define PT_BYTES_PER_PIXEL(v) (3 + (PT_HAS_WHITE(v) | PT_HAS_BRIGHT(v)))
+#define PT_X16b 0b00001000 // uint16_t with 5r6g5b bits per color
+/////// /////   ..xxxXXXXX
+#define PT_XTRA 0b00011111 // Mask for extra byte(s) defined below
 
-/// @brief apa102, apa106 native color order pixel array
+
 typedef struct _rgb {
 	static const uint8_t type = PT_RGB;
 	union {
@@ -86,7 +181,6 @@ typedef struct _rgb {
 	};
 } rgb;
 
-/// @brief apa104, ws2812 native color order pixel array
 typedef struct _grb {
 	static const uint8_t type = PT_GRB;
 	union {
@@ -111,7 +205,6 @@ typedef struct _bgr {
 	};
 } bgr;
 
-/// @brief rgbw sk6812 native color order pixel array
 typedef struct _rgbw {
 	static const uint8_t type = PT_RGB | PT_XXXW;
 	union {
@@ -125,11 +218,6 @@ typedef struct _rgbw {
 	};
 } rgbw;
 
-/// @brief uint32_t conversion
-/// We don't add PT_BXXX because APA102 require top 3 bits set to 1 and we would
-/// not be able to verify the user masked them properly. We could assume in raw
-/// uint32_t mode the user knows to set those bits properly but that makes the
-/// user code less portable across led strip types.
 typedef struct _wrgb {
 	static const uint8_t type = PT_RGB | PT_WXXX;
 	union {
@@ -143,7 +231,6 @@ typedef struct _wrgb {
 	};
 } wrgb;
 
-/// @brief  grbw sk6812 native color order pixel array
 typedef struct _grbw {
 	static const uint8_t type = PT_GRB | PT_XXXW;
 	union {
@@ -157,14 +244,13 @@ typedef struct _grbw {
 	};
 } grbw;
 
-/// @brief apa102 native color order pixel array
 typedef struct _hbgr {
 	static const uint8_t type = PT_BGR | PT_BXXX;
 	union {
 		struct {
-			union { uint8_t B; uint8_t brightness;
-	        		uint8_t w; uint8_t white;
-				uint8_t h;};
+		//	uint8_t h : 3; // High bits must be set to 0b111
+		//	union { uint8_t B : 5; uint8_t brightness : 5;
+	        //		uint8_t w : 5; uint8_t white : 5;};
 			union { uint8_t b; uint8_t blue;};
 			union { uint8_t g; uint8_t green;};
 			union { uint8_t r; uint8_t red;};
@@ -204,6 +290,7 @@ typedef union _paletteColor {
        uint8_t bpp8;
        uint8_t raw;
 } paletteColor;
+
 
 /// @brief Lists all the pixel types suported by the API
 /// The template parameters can use fab_led internal class types
@@ -386,38 +473,6 @@ enum avrLedStripPort {
 	F = 6
 };
 
-/// @brief Type for low-level SendBytes method to send data to the LED port
-enum ledProtocol {
-	// ONE-WIRE PROTOCOL: Data only bit serial port, with time sensitive signal
-	// WS2812 APA104 SK6812 and similar
-	BITBANG_1WI_1P = 1,	// Support LED with single data line, no clock,
-				// software bit-banging
-	BITBANG_1WI_S2P = 2, // Same, but update two ports in parallel,
-				// sending 1st half the array to one port, and
-				// the other half to the other
-	BITBANG_1WI_I2P = 3, // Same, but update two ports in parallel,
-				// interleaving the pixels sent to each port
-	BITBANG_1WI_8P = 4,  // Split array in up to 8 blocks each sent to
-				// respective port bits
-	PWM_1P = 5,          // Not implemented, use hardware PWM
-	UART_1P = 6,         // Not implemented, use UART serial port
-
-	// SPI PROTOCOL: Data + clock ports, data bit latched when clock goes H->L
-	// APA102 WS2801 and similar
-	// Specific versions handle specific quirks of each protocol like sending
-	// checksum or end bits to display properly. Ideally should be bitmask fields
-	HARDWARE_SPI = 7,       // Not implemented
-	BITBANG_SPI = 8,        // LEDs with data and clock line
-				// Since clock is sent, not sensitive to CPU
-				// frequency nor interrupts
-	BITBANG_SPI102 = 9,     // APA-102 LED with data and clock line and brightness
-	BITBANG_SPI9813 = 10,   // P9813 LED with data and clock line and cksum
-
-	UNSUPPORTED = 11 
-};
-// Minimum index of SPI protocol entries, below are 1WI
-#define PROTOCOL_SPI HARDWARE_SPI
-
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief Hack to survive undefined port on Arduino
@@ -586,7 +641,7 @@ const int cbiCycles = 2;
 ///	avrLedStripPort clockPortId Port the LED strip CI is attached to
 ///	uint8_t clockPortPin        Port bit the LED strip CI is attached to
 ///     class pixelClass            Native LED strip pixel type (grbw, etc.)
-///     ledProtocol protocol        LED strip communication protocol (spi, etc.)
+///     letPortComm_t protocol      LED port communication protocol (spi, etc.)
 
 /// @brief FAB_TDEF is the body of the class template declaration
 /// example: template <FAB_TDEF> class foo;
@@ -601,7 +656,8 @@ const int cbiCycles = 2;
 	avrLedStripPort clockPortId,  \
 	uint8_t         clockPortPin, \
 	class           pixelClass,   \
-	ledProtocol     protocol
+	ledType_t       ledType,      \
+	letPortComm_t   protocol
 
 /// @brief FAB_TVAR is the instantiation of class the template declaration
 /// example: template <FAB_TDEF> foo<FAB_TVAR>::function(...){...}
@@ -616,6 +672,7 @@ const int cbiCycles = 2;
 	                clockPortId,  \
 	                clockPortPin, \
 	                pixelClass,   \
+	                ledType,      \
 	                protocol
 
 /// @brief Class to drive LED strips. Relies on custom sendBytes() method to push data to LEDs
@@ -1173,8 +1230,6 @@ fab_led<FAB_TVAR>::fab_led()
 			SET_PORT_BYTE(dataPortId, 0x00); // all pins low
 			break;
 		case BITBANG_SPI:
-		case BITBANG_SPI9813:
-		case BITBANG_SPI102:
 		case HARDWARE_SPI:
 			// Use Data and Clock pins
 			SET_DDR_PIN_HIGH(dataPortId, dataPortPin);
@@ -1290,37 +1345,24 @@ fab_led<FAB_TVAR>::debug(void)
 		printChar(", ");
 	}
 
-	switch(protocol) {
-		case BITBANG_1WI_1P:
-			printChar("ONE-PORT (bitbang)");
-			break;
-		case BITBANG_1WI_S2P:
-			printChar("TWO-PORT-SPLIT (bitbang)");
-			break;
-		case BITBANG_1WI_I2P:
-			printChar("TWO-PORT-INTERLEAVED (bitbang)");
-			break;
-		case BITBANG_1WI_8P:
-			printChar("EIGHT-PORT (bitbang)");
-			break;
-		case PWM_1P:
-			printChar("ONE-PORT (PWM)");
-			break;
-		case UART_1P:
-			printChar("ONE-PORT (UART)");
-			break;
-		case BITBANG_SPI:
-			printChar("SPI (bitbang)");
-		case BITBANG_SPI9813:
-			printChar("P9813 SPI (bitbang)");
-		case BITBANG_SPI102:
-			printChar("APA-102 SPI (bitbang)");
-			break;
-		case HARDWARE_SPI:
-			printChar("SPI (hardware)");
-			break;
+	switch(ledType) {
+#define LED_TYPE1(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) case TYPE: printChar( #TYPE); break;
+#define LED_TYPE2(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) case TYPE: printChar( #TYPE); break;
+#define LED_TYPER(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) case TYPE: printChar( #TYPE); break;
+		LED_TYPES_LIST                                                               \
 		default:
-			printChar("PROTOCOL UNKNOWN");
+			printChar("UNKNOWN.");
+#undef LED_TYPE1
+#undef LED_TYPE2
+#undef LED_TYPER
+	}
+
+	switch(protocol) {
+#define LED_PORT_COMMUNICATION_PROTOCOL(index, label, desc) case label: printChar(desc); break;
+	LED_PORT_COMMUNICATION_PROTOCOLS_LIST
+#undef LED_PORT_COMMUNICATION_PROTOCOL
+		default:
+			printChar("Unsupported LED port communication protocol");
 	}
 	printChar("\n");
 #endif
@@ -1347,10 +1389,9 @@ fab_led<FAB_TVAR>::sendBytes(const uint16_t count, const uint8_t * array)
 			bitbang8PortWs_SendBytes(count, array);
 			break;
 		case BITBANG_SPI:
-		case BITBANG_SPI9813:
-		case BITBANG_SPI102:
 			bitbangSpi_SendBytes(count, array);
 			break;
+		case HARDWARE_SPI:
 		default:
 			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
 			break;
@@ -1669,10 +1710,12 @@ template<FAB_TDEF>
 inline void
 fab_led<FAB_TVAR>::bitbang1PortWs_SendBytes(const uint16_t count, const uint8_t * array)
 {
+	uint16_t c; // __asm__("r2");
+	int8_t b; // __asm__("r4");
 
-	for(uint16_t c=0; c < count; c++) {
+	for(c=0; c < count; ++c) {
 		const uint8_t val = array[c];
-		for(int8_t b=7; b>=0; b--) {
+		for(b=7; b>=0; --b) {
 			const bool bit = (val>>b) & 0x1;
  
  			if (bit) {
@@ -1745,17 +1788,18 @@ fab_led<FAB_TVAR>::begin(void)
 		case BITBANG_1WI_I2P:
 		case BITBANG_1WI_8P:
 			// 1-wire: Delay next pixels to cause a refresh
-			delay(minMsRefresh);
+			//DELAY_CYCLES(10);
+			if (minMsRefresh)
+				delay(minMsRefresh);
  			oldSREG = SREG;
 			// Disable interrupts.
 			__builtin_avr_cli();
 			break;
 		case BITBANG_SPI:
-		case BITBANG_SPI9813:
-		case BITBANG_SPI102:
 			// SPI: Send start frame of 32 bits set to zero to force refresh
 			bitbangSpi_Flatline(32, false);
 			break;
+		case HARDWARE_SPI:
 		default:
 			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
 			break;
@@ -1775,16 +1819,17 @@ fab_led<FAB_TVAR>::end(uint16_t count)
  			SREG = oldSREG;
 			break;
 		case BITBANG_SPI:
-		case BITBANG_SPI9813:
-		case BITBANG_SPI102:
-			// User overrides number of pixels tracked (rare)
-			if (count) {
-				pixelsDisplayed = count;
+			if (ledType == APA102) {
+				// User overrides number of pixels tracked (rare)
+				if (count) {
+					pixelsDisplayed = count;
+				}
+				// Send end frame equal to 1/2 bit per pixel sent.
+				bitbangSpi_Flatline((1+pixelsDisplayed)/2, true);
+				pixelsDisplayed = 0;
 			}
-			// Send end frame equal to 1/2 bit per pixel sent.
-			bitbangSpi_Flatline((1+pixelsDisplayed)/2, true);
-			pixelsDisplayed = 0;
 			break;
+		case HARDWARE_SPI:
 		default:
 			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
 			break;
@@ -1842,12 +1887,12 @@ fab_led<FAB_TVAR>::send(
 		case BITBANG_1WI_8P:
 			break;
 		case BITBANG_SPI:
-		case BITBANG_SPI9813:
-		case BITBANG_SPI102:
-			pixelsDisplayed += numPixels;
+		case HARDWARE_SPI:
+			if (ledType == APA102) {
+				pixelsDisplayed += numPixels;
+			}
 			break;
 		default:
-			static_assert(protocol < UNSUPPORTED, LED_protocol_not_supported);
 			break;
 	}
 }
@@ -1966,6 +2011,9 @@ fab_led<FAB_TVAR>::send(
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief
 /// Define all the LED protocol classes for each LED_TYPE using macro magic.
+/// LED_TYPE1: One port definition, like ws2812b<D,6>
+/// LED_TYPE2: Two ports definition, like apa102<D,5,D,6>
+/// LED_TYPER: One port range defintion, like ws2812b8<D,0,6>
 ///
 /// The macro declares the class setting all the template constants.
 /// For example when NAME is ws2812b, that creates a class you can instantiate
@@ -1978,49 +2026,45 @@ fab_led<FAB_TVAR>::send(
 ///        used for your pixel array
 /// H1, L1, H0, L0: Timings in nano-seconds for bit banging (0 if unused)
 /// RESET: Minimum time in msec to idle the bus between display refreshes
-/// WIRE_COM: Wire communication protocol, to send the data across at low level
+/// PROTOCOL: Wire communication protocol, to send the data across at low level
 /// DPID: LED data line port register ID (a letter from A to I)
 /// DPBIT: LED data line port bit (0 to 7)
 /// CPID: LED clock line port register ID (a letter from A to I)
 /// CPBIT: LED clock line port bit (0 to 7)
 ///////////////////////////////////////////////////////////////////////////////
-#define LED_TYPE2(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, WIRE_COM) \
+#define LED_TYPE1(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) \
 	template<avrLedStripPort  dataPortId, uint8_t  dataPortBit>           \
-	class NAME : public fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET,dataPortId, dataPortBit, A, 0, PIXEL, WIRE_COM>                      \
+	class NAME : public fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET,dataPortId, dataPortBit, A, 0, PIXEL, TYPE, PROTOCOL>                      \
 	{                                                                     \
 		public:                                                       \
-		NAME() : fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, dataPortId, dataPortBit, A, 0, PIXEL, WIRE_COM>() {};                   \
+		NAME() : fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, dataPortId, dataPortBit, A, 0, PIXEL, TYPE, PROTOCOL>() {};                   \
 		~NAME() {};                                                   \
 	};
 
-#define LED_TYPE4(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, WIRE_COM) \
+#define LED_TYPE2(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) \
 	template<avrLedStripPort  dataPortId, uint8_t  dataPortBit,           \
 	         avrLedStripPort clockPortId, uint8_t clockPortBit>           \
-	class NAME : public fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET,dataPortId, dataPortBit, clockPortId, clockPortBit, PIXEL, WIRE_COM>                      \
+	class NAME : public fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET,dataPortId, dataPortBit, clockPortId, clockPortBit, PIXEL, TYPE, PROTOCOL>                      \
 	{                                                                     \
 		public:                                                       \
-		NAME() : fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, dataPortId, dataPortBit, clockPortId, clockPortBit, PIXEL, WIRE_COM>() {};                   \
+		NAME() : fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, dataPortId, dataPortBit, clockPortId, clockPortBit, PIXEL, TYPE, PROTOCOL>() {};                   \
 		~NAME() {};                                                   \
 	};
 
-//#define LED_TEMPLATE_PARAMS CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, DPID, DPBIT, CPID, CPBIT, PIXEL, WIRE_COM
+#define LED_TYPER(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL)                                \
+	template<avrLedStripPort  dataPortId, uint8_t  dataPortBit1, uint8_t dataPortBit2>           \
+	class NAME : public fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET,dataPortId, dataPortBit1, dataPortId, dataPortBit2, PIXEL, TYPE, PROTOCOL>                      \
+	{                                                                     \
+		public:                                                       \
+		NAME() : fab_led<CYCLES(H1), CYCLES(L1), CYCLES(H0), CYCLES(L0), RESET, dataPortId, dataPortBit1, dataPortId, dataPortBit2, PIXEL, TYPE, PROTOCOL>() {};                   \
+		~NAME() {};                                                   \
+	};
 
-///      (     NAME  ,     TYPE  ,PIXEL,  H1,  L1,  H0,  L0,RESET,   WIRE_COM     )
-LED_TYPE4(  apa102   ,  APA102   , hbgr,   0,   0,   0,   0,  84, BITBANG_SPI102  ) \
-LED_TYPE4(  ws2801   ,  WS2801   ,  bgr,   0,   0,   0,   0,  84, BITBANG_SPI     ) \
-LED_TYPE2(  sk6812   ,  SK6812   , rgbw,1210, 200, 200,1210,  84, BITBANG_1WI_1P  ) \
-LED_TYPE2(  sk6812b  ,  SK6812B  , grbw,1210, 200, 200,1210,  84, BITBANG_1WI_1P  ) \
-LED_TYPE2(  apa104   ,  APA104   , grb ,1210, 200, 200,1210,  50, BITBANG_1WI_1P  ) \
-LED_TYPE2(  apa106   ,  APA106   , rgb ,1210, 200, 200,1210,  50, BITBANG_1WI_1P  ) \
-LED_TYPE2(  ws2811   ,  WS2811   , rgb , 500, 125, 125, 188,  20, BITBANG_1WI_1P  ) \
-LED_TYPE2(  ws2812b  ,  WS2812B  , grb , 500, 125, 125, 188,  20, BITBANG_1WI_1P  ) \
-LED_TYPE2(  ws2812   ,  WS2812   , grb , 550, 200, 200, 550,  50, BITBANG_1WI_1P  ) \
-LED_TYPE2(  ws2812std,  WS2812STD, grb , 650, 125, 125, 650,  50, BITBANG_1WI_1P  ) \
-LED_TYPE4(  ws2812bi ,  WS2812BI , grb , 550, 200, 200, 550,  50, BITBANG_1WI_I2P ) \
-LED_TYPE4(  ws2812bs ,  WS2812BS , grb , 550, 200, 200, 550,  50, BITBANG_1WI_S2P ) \
-LED_TYPE4(  ws2812b8 ,  WS2812B8 , grb , 500, 125, 125, 188,  20, BITBANG_1WI_8P  ) \
+LED_TYPES_LIST
 
-#undef LED_TYPE
+#undef LED_TYPE1
+#undef LED_TYPE2
+#undef LED_TYPER
 #undef LED_TEMPLATE_PARAMS
 
 #endif // FAB_LED_H
