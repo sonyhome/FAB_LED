@@ -1520,7 +1520,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 				goto end;
 			}
 			const uint8_t colorIndex = elem & andMask;
-			sendBytes(bytesPerPixel, &palette[bytesPerPixel*colorIndex]);
+			sendBytes(bytesPerPixel, (uint8_t*)(&palette[colorIndex]));
 			elem >>= bitsPerPixel;
 		}
 	}
