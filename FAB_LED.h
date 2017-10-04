@@ -119,17 +119,6 @@ enum ledType_t
 #undef LED_TYPE2
 #undef LED_TYPER
 
-// Define native LED pixel types. A user can use it to have a pixel type native
-// to the LED they use. For example:
-// ws2818bPixel array[numPixels];
-#define TYPE_GEN(a, b) a ## b
-#define LED_TYPE1(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
-#define LED_TYPE2(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
-#define LED_TYPER(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
-LED_TYPES_LIST
-#undef LED_TYPE1
-#undef LED_TYPE2
-#undef LED_TYPER
 
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief pixel structure types for every LED protocol supported.
@@ -248,9 +237,9 @@ typedef struct _hbgr {
 	static const uint8_t type = PT_BGR | PT_BXXX;
 	union {
 		struct {
-		//	uint8_t h : 3; // High bits must be set to 0b111
-		//	union { uint8_t B : 5; uint8_t brightness : 5;
-	        //		uint8_t w : 5; uint8_t white : 5;};
+			uint8_t H:3; // Hight 3 bits must be set to 1.
+			union { uint8_t w:5; uint8_t white:5;
+				uint8_t B:5; uint8_t brightness:5; };
 			union { uint8_t b; uint8_t blue;};
 			union { uint8_t g; uint8_t green;};
 			union { uint8_t r; uint8_t red;};
@@ -291,6 +280,20 @@ typedef union _paletteColor {
        uint8_t raw;
 } paletteColor;
 
+
+////////////////////////////////////////////////////////////////////////////////
+// Define native LED pixel types. A user can use it to have a pixel type native
+// to the LED they use. For example:
+// ws2818bPixel array[numPixels];
+////////////////////////////////////////////////////////////////////////////////
+#define TYPE_GEN(a, b) a ## b
+#define LED_TYPE1(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
+#define LED_TYPE2(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
+#define LED_TYPER(NAME, TYPE, PIXEL, H1, L1, H0, L0,RESET, PROTOCOL) typedef PIXEL TYPE_GEN(TYPE, Pixel);
+LED_TYPES_LIST
+#undef LED_TYPE1
+#undef LED_TYPE2
+#undef LED_TYPER
 
 /// @brief Lists all the pixel types suported by the API
 /// The template parameters can use fab_led internal class types
@@ -551,6 +554,10 @@ enum avrLedStripPort {
 #define SET_PORT_PIN_HIGH(portId, portPin) AVR_PORT(portId) |=   1U << portPin
 #define SET_PORT_PIN_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin)
 
+#define CLEAR_INTERRUPTS   oldSREG = SREG; \
+			   __builtin_avr_cli()
+#define RESTORE_INTERRUPTS SREG = oldSREG
+
 /// Method to optimally delay N cycles with nops for bitBang.
 #define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count)
 
@@ -582,10 +589,13 @@ const int cbiCycles = 2;
 #define SET_PORT_PIN_HIGH(portId, pinId)   digitalWriteFast(pinId, 1)
 #define SET_PORT_PIN_LOW( portId, pinId)   digitalWriteFast(pinId, 0)
 
+#define CLEAR_INTERRUPTS   oldSREG = SREG
+#define RESTORE_INTERRUPTS SREG = oldSREG
+
 /// Delay N cycles using cycles register
 inline void spinDelay(const uint16_t count)
 {
-	const int till = count + ARM_DWT_CYCCNT;
+	const uint16_t till = count + ARM_DWT_CYCCNT;
 	while (ARM_DWT_CYCCNT < till);
 }
 #define DELAY_CYCLES(count) spinDelay(count)
@@ -1791,9 +1801,8 @@ fab_led<FAB_TVAR>::begin(void)
 			//DELAY_CYCLES(10);
 			if (minMsRefresh)
 				delay(minMsRefresh);
- 			oldSREG = SREG;
 			// Disable interrupts.
-			__builtin_avr_cli();
+			CLEAR_INTERRUPTS;
 			break;
 		case BITBANG_SPI:
 			// SPI: Send start frame of 32 bits set to zero to force refresh
@@ -1816,7 +1825,7 @@ fab_led<FAB_TVAR>::end(uint16_t count)
 		case BITBANG_1WI_I2P:
 		case BITBANG_1WI_8P:
 			// Restore interrupts.
- 			SREG = oldSREG;
+			RESTORE_INTERRUPTS;
 			break;
 		case BITBANG_SPI:
 			if (ledType == APA102) {
