@@ -94,8 +94,8 @@ enum letPortComm_t {
 LED_TYPE2(  apa102   ,  APA102   , hbgr,   0,   0,   0,   0,   84, BITBANG_SPI     ) \
 LED_TYPE2(  ws2801   ,  WS2801   ,  bgr,   0,   0,   0,   0,   84, BITBANG_SPI     ) \
 LED_TYPE2(  sk9813   ,  SK9813   ,  bgr,   0,   0,   0,   0,   84, BITBANG_SPI     ) \
-LED_TYPE1(  sk6812   ,  SK6812   , rgbw,1210, 200, 200,1210,   84, BITBANG_1WI_1P  ) \
-LED_TYPE1(  sk6812b  ,  SK6812B  , grbw,1210, 200, 200,1210,   84, BITBANG_1WI_1P  ) \
+LED_TYPE1(  sk6812   ,  SK6812   , rgbw,1210, 200, 200,1210,   0, BITBANG_1WI_1P  ) \
+LED_TYPE1(  sk6812b  ,  SK6812B  , grbw,1210, 200, 200,1210,   0, BITBANG_1WI_1P  ) \
 LED_TYPE1(  apa104   ,  APA104   , grb ,1210, 200, 200,1210,   50, BITBANG_1WI_1P  ) \
 LED_TYPE1(  apa106   ,  APA106   , rgb ,1210, 200, 200,1210,   50, BITBANG_1WI_1P  ) \
 LED_TYPE1(  ws2811   ,  WS2811   , rgb , 500, 125, 125, 188,   20, BITBANG_1WI_1P  ) \
