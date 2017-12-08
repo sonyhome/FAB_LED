@@ -15,7 +15,22 @@
 // The bit-banging is being done using GCC built-ins to avoid contrived ASM
 // language code blocks support. It should work for any arduino platform of
 // 16MHz or more to function.
+//
 ////////////////////////////////////////////////////////////////////////////////
+/// @todo for 2018
+/// * Split pixel definition, communication protocol and port pins ?
+///   Allow port pints to count the number of bytes and pixels sent for protocol
+///   to reset transmission? This would allow multiple protocols on the same
+///   ports and still count pixels properly. This is for APA102 only!
+///   Alternatively allow user to use the endSend(numPixels) override.
+/// * Clean up separation of SPI and APA102 for SK6822 support which doesn't
+///   need variable stop bits
+/// * Repare remapping support, palette support,optimize WS2812 cycles more
+///   with oscilloscope and disassembly
+/// * Test the 8-port with 6+ ports at 16MHz, why am I short of cycles?
+/// * VERIFY CODE SIZE GENERATION IS STILL SMALL
+/// * PORT TO ARM0 the wait loop for WS2812!!!
+/// * FINALIZE THE USER API
 ////////////////////////////////////////////////////////////////////////////////
 #ifndef FAB_LED_H
 #define FAB_LED_H
@@ -201,7 +216,7 @@ typedef struct _rgbw {
 			union { uint8_t r; uint8_t red;};
 			union { uint8_t g; uint8_t green;};
 			union { uint8_t b; uint8_t blue;};
-			union { uint8_t w; uint8_t white;};
+			union { uint8_t W; uint8_t w; uint8_t white;};
 		};
 		uint8_t raw[4];
 	};
@@ -211,7 +226,7 @@ typedef struct _wrgb {
 	static const uint8_t type = PT_RGB | PT_WXXX;
 	union {
 		struct {
-			union { uint8_t w; uint8_t white;};
+			union { uint8_t W; uint8_t w; uint8_t white;};
 			union { uint8_t r; uint8_t red;};
 			union { uint8_t g; uint8_t green;};
 			union { uint8_t b; uint8_t blue;};
@@ -227,7 +242,7 @@ typedef struct _grbw {
 			union { uint8_t g; uint8_t green;};
 			union { uint8_t r; uint8_t red;};
 			union { uint8_t b; uint8_t blue;};
-			union { uint8_t w; uint8_t white;};
+			union { uint8_t W; uint8_t w; uint8_t white;};
 		};
 		uint8_t raw[4];
 	};
@@ -237,9 +252,9 @@ typedef struct _hbgr {
 	static const uint8_t type = PT_BGR | PT_BXXX;
 	union {
 		struct {
-			uint8_t H:3; // Hight 3 bits must be set to 1.
-			union { uint8_t w:5; uint8_t white:5;
-				uint8_t B:5; uint8_t brightness:5; };
+			union { // uint8_t W; uint8_t w; uint8_t white;
+				uint8_t B; uint8_t brightness;
+				uint8_t H; uint8_t h; };
 			union { uint8_t b; uint8_t blue;};
 			union { uint8_t g; uint8_t green;};
 			union { uint8_t r; uint8_t red;};
@@ -704,6 +719,13 @@ public:
 	~fab_led() { };
 
 	////////////////////////////////////////////////////////////////////////
+	/// @brief Helper function to generate a trigger pulse on a pin to help
+	/// debugging signals on an oscilloscope
+	////////////////////////////////////////////////////////////////////////
+	template <uint8_t pin>
+	static inline void trigger(void);
+
+	////////////////////////////////////////////////////////////////////////
 	/// @brief Prints to console the configuration
 	/// You must implement the template print routines
 	///   Example:
@@ -752,28 +774,28 @@ private:
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @brief Implements sendBytes for the 1-port SPI protocol
+	/// @brief Implements sendBytes for the SPI protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
 	bitbangSpi_SendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @brief Implements sendBytes for the 1-ports protocol
+	/// @brief Implements sendBytes for the 1-ports one-wire protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
 	bitbang1PortWs_SendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @brief Implements sendBytes for the 2-ports protocol
+	/// @brief Implements sendBytes for the 2-ports one-wire protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
 	bitbang2portWs_SendBytes(const uint16_t count, const uint8_t * array)
 	__attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
-	/// @brief Implements sendBytes for the 8-ports protocol
+	/// @brief Implements sendBytes for the 8-ports one-wire protocol
 	////////////////////////////////////////////////////////////////////////
 	static inline void
 	bitbang8PortWs_SendBytes(const uint16_t count, const uint8_t * array)
@@ -800,10 +822,10 @@ public:
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Starts a write sequence to the LED strip for send
-	/// @note: Call end() as soon as possible
+	/// @note: Call endSend() as soon as possible
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	begin(void) __attribute__ ((always_inline));
+	beginSend(void) __attribute__ ((always_inline));
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Ends a write sequence to the LED strip for send
@@ -811,10 +833,10 @@ public:
 	///                   cases, the user may send pixels to a port using 2
 	///                   or more protocols. In that case the count can't
 	///                   be tracked and the user must provide it.
-	/// @note: Call end() as soon as possible after begin()
+	/// @note: Call endSend() as soon as possible after beginSend()
 	////////////////////////////////////////////////////////////////////////
 	static inline void
-	end(uint16_t count = 0) __attribute__ ((always_inline));
+	endSend(uint16_t count = 0) __attribute__ ((always_inline));
 
 
 private:
@@ -1095,9 +1117,9 @@ public:
 	////////////////////////////////////////////////////////////////////////
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	static inline void draw(const uint16_t count, const _typeIn * array) { \
-		begin(); \
+		beginSend(); \
 		send(count, array); \
-		end(); \
+		endSend(); \
 	} __attribute__ ((always_inline)); 
 	SEND_AND_DRAW_API_LIST;
 #undef API_ENTRY
@@ -1127,9 +1149,9 @@ public:
 	// 8bit map
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	static inline void draw(const uint16_t count, const _typeIn * array, uint8_t * map) { \
-		begin(); \
+		beginSend(); \
 		send(count, array, NULL, map); \
-		end(); \
+		endSend(); \
 	} __attribute__ ((always_inline));
 	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
@@ -1137,9 +1159,9 @@ public:
 	// 16bit map
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	static inline void draw(const uint16_t count, const _typeIn * array, uint16_t * map) { \
-		begin(); \
+		beginSend(); \
 		send(count, array, NULL, map); \
-		end(); \
+		endSend(); \
 	} __attribute__ ((always_inline));
 	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
@@ -1176,9 +1198,9 @@ public:
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	template <const uint8_t bitsPerPixel> \
 	static inline void draw(const uint16_t count, const uint8_t * array, const _typeIn * palette, uint8_t * map = NULL) { \
-		begin(); \
+		beginSend(); \
 		send<bitsPerPixel>(count, array, palette, map); \
-		end(); \
+		endSend(); \
 	} __attribute__ ((always_inline));
 	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
@@ -1187,9 +1209,9 @@ public:
 #define API_ENTRY(_countOut, _typeIn, _typeOut) \
 	template <const uint8_t bitsPerPixel> \
 	static inline void draw(const uint16_t count, const uint16_t * array, const _typeIn * palette, uint16_t * map = NULL) { \
-		begin(); \
+		beginSend(); \
 		send<bitsPerPixel>(count, array, palette, map); \
-		end(); \
+		endSend(); \
 	} __attribute__ ((always_inline));
 	SEND_AND_DRAW_API_LIST
 #undef API_ENTRY
@@ -1257,6 +1279,15 @@ fab_led<FAB_TVAR>::fab_led()
 ////////////////////////////////////////////////////////////////////////////////
 // Debug routine
 ////////////////////////////////////////////////////////////////////////////////
+template<FAB_TDEF>
+template<uint8_t pin>
+inline void
+fab_led<FAB_TVAR>::trigger()
+{
+	SET_PORT_PIN_LOW(clockPortId, pin);
+	SET_PORT_PIN_HIGH(clockPortId, pin);
+}
+
 template<FAB_TDEF>
 template <void printChar(const char *),void printInt(uint32_t)>
 inline void
@@ -1423,12 +1454,15 @@ fab_led<FAB_TVAR>::bitbangSpi_Flatline(const uint16_t numBits, bool high)
 	}
 }
 
+/// @brief bit bang an array of count bytes to the SPI data port, triggering a low -> high
+/// transition on the clock port.
 template<FAB_TDEF>
 inline void
 fab_led<FAB_TVAR>::bitbangSpi_SendBytes(const uint16_t count, const uint8_t * array)
 {
 	for(uint16_t cnt = 0; cnt < count; ++cnt) {
 		const uint8_t val = array[cnt];
+		
 		// Send byte msbit first
 		for(int8_t b=7; b>=0; b--) {
 			const bool bit = (val>>b) & 0x1;
@@ -1776,11 +1810,11 @@ fab_led<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value)
        	*(char*) & p = 0xFF;
 	p.r = p.g = p.b = value;
 
- 	begin();
+ 	beginSend();
 	for(uint16_t i = 0; i < numPixels; i++) {
 		send(1, &p);
 	}
-	end();
+	endSend();
 }
 
 
@@ -1790,7 +1824,7 @@ fab_led<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value)
 
 template<FAB_TDEF>
 inline void
-fab_led<FAB_TVAR>::begin(void)
+fab_led<FAB_TVAR>::beginSend(void)
 {
 	switch (protocol) {
 		case BITBANG_1WI_1P:
@@ -1805,8 +1839,10 @@ fab_led<FAB_TVAR>::begin(void)
 			CLEAR_INTERRUPTS;
 			break;
 		case BITBANG_SPI:
-			// SPI: Send start frame of 32 bits set to zero to force refresh
-			bitbangSpi_Flatline(32, false);
+			if (ledType == APA102) {
+				// APA-102: Send start frame of 32 bits set to zero to force refresh
+				bitbangSpi_Flatline(32, false);
+			}
 			break;
 		case HARDWARE_SPI:
 		default:
@@ -1817,7 +1853,7 @@ fab_led<FAB_TVAR>::begin(void)
 
 template<FAB_TDEF>
 inline void
-fab_led<FAB_TVAR>::end(uint16_t count)
+fab_led<FAB_TVAR>::endSend(uint16_t count)
 {
 	switch (protocol) {
 		case BITBANG_1WI_1P:
@@ -1833,8 +1869,8 @@ fab_led<FAB_TVAR>::end(uint16_t count)
 				if (count) {
 					pixelsDisplayed = count;
 				}
-				// Send end frame equal to 1/2 bit per pixel sent.
-				bitbangSpi_Flatline((1+pixelsDisplayed)/2, true);
+				// Send end frame N bits >= to 1/2 pixels sent.
+				bitbangSpi_Flatline(1+pixelsDisplayed/2, false);
 				pixelsDisplayed = 0;
 			}
 			break;
@@ -1853,34 +1889,48 @@ fab_led<FAB_TVAR>::send(
 		const pixelClassF * array)
 {
 	if (pixelClassF::type == pixelClass::type) {
-		// Native type, send as-is
+		// APA-102 failsafe: Top 3 bits must be set, repair if we detect a problem
+		if ((pixelClass::type & PT_BXXX) && ((array[0].raw[0] & 0xE0) != 0xE0)) {
+			for(uint16_t i = 0; i < numPixels; ++i) {
+				if (array[i].raw[0]) {
+					const_cast<uint8_t*>(array[i].raw)[0] |= 0xE0; // Set: Force top 3 bits!
+				} else {
+					const_cast<uint8_t*>(array[i].raw)[0] |= 0xFF; // Not set: use max brightness!
+				}
+			}
+		}
+		// Native array type, matches the LED strip type, send as-is
 		sendBytes(numPixels * stripBPP, (uint8_t *) array);
 	} else {
-		// Create a native pixel for buffer
+		// Create a 1 pixel buffer of native type to the LED strip to do the conversion
 		pixelClass p = pixelClass();
-		uint8_t * pRaw = (uint8_t *) & p;
-		// initialize special non-zero byte
-		if (pixelClass::type & PT_BXXX) {
-			pRaw[0] = 0xFF;
+
+		// Array doesn't define brightness so set it to max.
+		if ((pixelClass::type & PT_BXXX) && (!(pixelClassF::type & PT_BXXX))) {
+			p.raw[0] = 0xFF; // We use raw because 3B LEDS have no B or H field
 		}
+
 		for (uint16_t i = 0; i < numPixels; i++) {
 			const pixelClassF & a = array[i];
-			const uint8_t * aRaw = (const uint8_t *) & a;
-
-			// If statement is resolved at compile time
-			if (pixelClass::type & pixelClassF::type & PT_BXXX) {
-				pRaw[0] = aRaw[0];
+			// Static if statement are resolved at compile time
+			if (pixelClass::type & PT_XXXW) {
+				// Support RGBW, GRBW...
+				if (pixelClassF::type & PT_WXXX) {
+					p.raw[3] = a.raw[0];
+				} else {
+					// BXXX value is not converted as it's brightness not white level
+					p.raw[3] = 0;
+				}
+			} else if (pixelClass::type & PT_WXXX) {
+				// Support WRGB, WGRB...
+				if (pixelClassF::type & PT_XXXW) {
+					p.raw[0] = a.raw[3];
+				} else {
+					// BXXX value is not converted as it's brightness not white level
+					p.raw[0] = 0;
+				}
 			}
-			// If statement is resolved at compile time
-			if (pixelClass::type & pixelClassF::type & PT_XXXW) {
-				pRaw[3] = aRaw[3];
-			} else if (pixelClass::type & pixelClassF::type & PT_WXXX) {
-				pRaw[0] = aRaw[0];
-			} else if ((pixelClass::type & PT_XXXW) && (pixelClassF::type & PT_WXXX)) {
-				pRaw[3] = aRaw[0];
-			} else if ((pixelClass::type & PT_WXXX) && (pixelClassF::type & PT_XXXW)) {
-				pRaw[0] = aRaw[3];
-			}
+			// Colors are always defined so use them as-is
 			p.r = a.r;
 			p.g = a.g;
 			p.b = a.b;
