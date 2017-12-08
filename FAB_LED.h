@@ -819,6 +819,19 @@ public:
 			const uint8_t value)
 	__attribute__ ((always_inline));
 
+	////////////////////////////////////////////////////////////////////////
+	/// @brief Sets the LED strip to a single color value
+	/// @param[in] count  Number of pixels to erase
+	/// @param[in] r,g,b,W,B  colors, white for RGBW strips, and brightness
+	///            for strips that have a separate setting [0..255]
+	////////////////////////////////////////////////////////////////////////
+	static inline void color(
+			const uint16_t numPixels,
+			const uint8_t r,
+			const uint8_t g,
+			const uint8_t b,
+			const uint8_t W = 0,
+			const uint8_t B = 0);
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Starts a write sequence to the LED strip for send
@@ -1059,7 +1072,7 @@ public:
 	/*
 #define API_ENTRY(_countOut, _typeIn, _typeOut)                                \
 	template <const uint8_t bitsPerPixel>                                  \
-	static inline void sendX(                                               \
+	static inline void sendX(                                              \
 			const uint16_t count,                                  \
 			const uint8_t * array,                                 \
 			const uint8_t * redPalette,                            \
@@ -1817,6 +1830,31 @@ fab_led<FAB_TVAR>::grey(const uint16_t numPixels, const uint8_t value)
 	endSend();
 }
 
+template<FAB_TDEF>
+inline void
+fab_led<FAB_TVAR>::color(const uint16_t numPixels, const uint8_t r, const uint8_t g, const uint8_t b, const uint8_t W, const uint8_t B)
+{
+	pixelClass p;
+
+	// Try to set all the bytes based on user input
+	if (pixelClass::type & PT_BXXX)
+	{
+		if (B) p.raw[0] = 0xE0 | B;
+		else   p.raw[0] = 0xFF;
+	}
+	if (pixelClass::type & PT_WXXX) p.raw[0] = W;
+	if (pixelClass::type & PT_XXXW) p.raw[3] = W;
+	p.r = r;
+	p.g = g;
+	p.b = b;
+
+ 	beginSend();
+	for(uint16_t i = 0; i < numPixels; i++) {
+		send(1, &p);
+	}
+	endSend();
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 // Begin/End
@@ -1839,10 +1877,8 @@ fab_led<FAB_TVAR>::beginSend(void)
 			CLEAR_INTERRUPTS;
 			break;
 		case BITBANG_SPI:
-			if (ledType == APA102) {
-				// APA-102: Send start frame of 32 bits set to zero to force refresh
-				bitbangSpi_Flatline(32, false);
-			}
+			// Send start frame of 32 bits set to zero to force refresh
+			bitbangSpi_Flatline(32, false);
 			break;
 		case HARDWARE_SPI:
 		default:
@@ -1864,12 +1900,14 @@ fab_led<FAB_TVAR>::endSend(uint16_t count)
 			RESTORE_INTERRUPTS;
 			break;
 		case BITBANG_SPI:
+			// It seems only APA102 sends clocks skewed by 1/2 cycle hence needs N/2
+			// extra cycles to update the last pixels of the LED strip.
 			if (ledType == APA102) {
 				// User overrides number of pixels tracked (rare)
 				if (count) {
 					pixelsDisplayed = count;
 				}
-				// Send end frame N bits >= to 1/2 pixels sent.
+				// Send end frame N bits >= to 0.5 * pixels sent.
 				bitbangSpi_Flatline(1+pixelsDisplayed/2, false);
 				pixelsDisplayed = 0;
 			}
@@ -1947,6 +1985,7 @@ fab_led<FAB_TVAR>::send(
 			break;
 		case BITBANG_SPI:
 		case HARDWARE_SPI:
+			// APA102 needs to track # of pixels sent for endSend()
 			if (ledType == APA102) {
 				pixelsDisplayed += numPixels;
 			}
