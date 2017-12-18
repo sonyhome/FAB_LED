@@ -638,7 +638,7 @@ Hardware          | Test    | Tester
 `Controllers`     |         |
 Arduino Uno       | Pass    | Sonyhome
 AtTiny85 16MHz    | Pass    | Sonyhome
-                  |         |
+ | |
 `LEDs`            |         |
 ws2812bs          | Pass    | Sonyhome
 ws2812bi          | Pass    | Sonyhome
