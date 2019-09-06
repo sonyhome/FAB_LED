@@ -6,60 +6,60 @@
 # Class
 #######################################
 
-avrBitbangLedStrip KEYWORD1
+avrBitbangLedStrip	KEYWORD1
 
 #######################################
 # Datatypes (KEYWORD1)
 #######################################
 
-avrLedStripPort     KEYWORD1
-avrBitbangLedStrip  KEYWORD1
-ws2812bs            KEYWORD1
-ws2812bi            KEYWORD1
-ws2812b             KEYWORD1
-ws2812              KEYWORD1
-pl9823              KEYWORD1
-apa102              KEYWORD1
-apa104              KEYWORD1
-apa106              KEYWORD1
-sk6812              KEYWORD1
-sk6812b             KEYWORD1
+avrLedStripPort	KEYWORD1
+avrBitbangLedStrip	KEYWORD1
+ws2812bs	KEYWORD1
+ws2812bi	KEYWORD1
+ws2812b	KEYWORD1
+ws2812	KEYWORD1
+pl9823	KEYWORD1
+apa102	KEYWORD1
+apa104	KEYWORD1
+apa106	KEYWORD1
+sk6812	KEYWORD1
+sk6812b	KEYWORD1
 
-rgb                 KEYWORD1
-grb                 KEYWORD1
-bgr                 KEYWORD1
-rgbw                KEYWORD1
-grbw                KEYWORD1
-bgrw                KEYWORD1
+rgb	KEYWORD1
+grb	KEYWORD1
+bgr	KEYWORD1
+rgbw	KEYWORD1
+grbw	KEYWORD1
+bgrw	KEYWORD1
 
-avrLedStripPort     KEYWORD1
-pixelFormat         KEYWORD1
-ledProtocol         KEYWORD1
+avrLedStripPort	KEYWORD1
+pixelFormat	KEYWORD1
+ledProtocol	KEYWORD1
 
 
 #######################################
 # Methods and Functions (KEYWORD2)
 #######################################
 
-SET_PORT_LOW        KEYWORD2
-SET_PORT_HIGH       KEYWORD2
-CYCLES              KEYWORD2
-NANOSECONDS         KEYWORD2
-SET_PIXEL           KEYWORD2
-GET_PIXEL           KEYWORD2
-sendBytes           KEYWORD2
-avrBitbangLedStrip  KEYWORD2
-debug               KEYWORD2
-clear               KEYWORD2
-grey                KEYWORD2
-sendPixels          KEYWORD2
-RGBtoGBR            KEYWORD2
-refresh             KEYWORD2
-minRefreshDelay     KEYWORD2
-spiSoftwareSendFrame     KEYWORD2
-spiSoftwareSendBytes     KEYWORD2
-onePortSoftwareSendBytes KEYWORD2
-twoPortSoftwareSendBytes KEYWORD2
+SET_PORT_LOW	KEYWORD2
+SET_PORT_HIGH	KEYWORD2
+CYCLES	KEYWORD2
+NANOSECONDS	KEYWORD2
+SET_PIXEL	KEYWORD2
+GET_PIXEL	KEYWORD2
+sendBytes	KEYWORD2
+avrBitbangLedStrip	KEYWORD2
+debug	KEYWORD2
+clear	KEYWORD2
+grey	KEYWORD2
+sendPixels	KEYWORD2
+RGBtoGBR	KEYWORD2
+refresh	KEYWORD2
+minRefreshDelay	KEYWORD2
+spiSoftwareSendFrame	KEYWORD2
+spiSoftwareSendBytes	KEYWORD2
+onePortSoftwareSendBytes	KEYWORD2
+twoPortSoftwareSendBytes	KEYWORD2
 
 #######################################
 # Instances (KEYWORD2)
@@ -70,25 +70,25 @@ twoPortSoftwareSendBytes KEYWORD2
 # Constants (LITERAL1)
 #######################################
 
-A                   LITERAL1
-B                   LITERAL1
-C                   LITERAL1
-D                   LITERAL1
-E                   LITERAL1
-F                   LITERAL1
+A	LITERAL1
+B	LITERAL1
+C	LITERAL1
+D	LITERAL1
+E	LITERAL1
+F	LITERAL1
 
-NONE                LITERAL1
-RGB                 LITERAL1
-GRB                 LITERAL1
-BGR                 LITERAL1
-RGBW                LITERAL1
-GRBW                LITERAL1
+NONE	LITERAL1
+RGB	LITERAL1
+GRB	LITERAL1
+BGR	LITERAL1
+RGBW	LITERAL1
+GRBW	LITERAL1
 BGRW
 
-ONE_PORT_BITBANG    LITERAL1
-TWO_PORT_SPLIT_BITBANG         LITERAL1
-TWO_PORT_INTLV_BITBANG         LITERAL1
-ONE_PORT_PWM        LITERAL1
-ONE_PORT_UART       LITERAL1
-SPI_BITBANG         LITERAL1
-SPI_HARDWARE        LITERAL1
+ONE_PORT_BITBANG	LITERAL1
+TWO_PORT_SPLIT_BITBANG	LITERAL1
+TWO_PORT_INTLV_BITBANG	LITERAL1
+ONE_PORT_PWM	LITERAL1
+ONE_PORT_UART	LITERAL1
+SPI_BITBANG	LITERAL1
+SPI_HARDWARE	LITERAL1
