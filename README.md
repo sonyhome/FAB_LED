@@ -78,12 +78,12 @@ In terms of usability, and memory footprint I believe FAB_LED is supperior to th
 
 To demonstrate the benefits of FAB_LED, here are apples-to-apples comparison code snippets to do the same thing with different LED libraires, with compilation results for an Arduino Uno target, compiled on Mac, with Arduino 1.6.7:
 
-| Sketch      | Variables | Library |
-|------------:|----------:|--------:|
-| 2,846 bytes | 40 bytes  | Adafruit NeoPixel |
-| 2,826 bytes | 37 bytes  | Adafruit DotStar |
-| 3,864 bytes | 105 bytes | FastLED |
-| 736 bytes   | 34 bytes  | FAB_LED |
+| Sketch      | Variables  | Library |
+|------------:|-----------:|--------:|
+| 2,846 bytes | 40 bytes   | Adafruit NeoPixel |
+| 2,826 bytes | 37 bytes   | Adafruit DotStar |
+| 3,864 bytes | 105 bytes  | FastLED |
+| *736 bytes* | *34 bytes* | *FAB_LED* |
 
 ### Adafruit NeoPixel library
 
