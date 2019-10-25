@@ -200,8 +200,6 @@ This example shows how simple it is to address the LEDs with this library. With 
 the complex part is it calls random() to pick a pixel to update, and random() again for each color, to pick a random color.
 There are actually only 4 lines that are related to using the LED library.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/XfvVzaV4vOs" frameborder="0" allowfullscreen></iframe>
-
 <a href="https://www.youtube.com/embed/XfvVzaV4vOs"
 target="_blank"><img src="https://i.ytimg.com/vi/XfvVzaV4vOs/default.jpg"
 width="240" height="180" border="10" align="right" /></a>
