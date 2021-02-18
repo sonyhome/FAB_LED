@@ -33,7 +33,7 @@
 #define STATIC_ASSERT3(X,M,L) STATIC_ASSERT4(X, M, L)
 #define STATIC_ASSERT2(X,M,L) STATIC_ASSERT3(X,M,L)
 //#define STATIC_ASSERT(X,M)    STATIC_ASSERT2(X,M,__LINE__)
-#define STATIC_ASSERT(X,M)    
+#define STATIC_ASSERT(X,M)
 #else
 #define SA2TXT2(x) # x
 #define SA2TXT(x) SA2TXT2(x)
@@ -216,6 +216,9 @@ enum ledProtocol {
 // Define a DUMMY_PORT_ID that will be used to patch unknown ports to map to
 // the first existing port we find. Undefined ports won't be used but this
 // lets the compiler work without complaining.
+
+#ifndef ARDUINO_ARCH_MEGAAVR
+
 #if defined(PORTD)
 #define DUMMY_PORT PORTD
 #define DUMMY_DDR   DDRD
@@ -258,6 +261,51 @@ enum ledProtocol {
 #endif // PORTF
 #endif // DUMMY_PORT
 
+#else
+// For modern AVRs (AVRxt instructionset variant, new style peripherals)
+// which Arduino calls "megaavr" despite the fact that Microchip already used
+// that term to refer to anything with ATmega in the name and most "megaavr"
+// parts are not part of the megaAVR product line (they're tinyAVR or AVR Dx)
+
+// These parts ALL have at least some of the pins in PORTA present (starting with
+// the first letter? A novel concept!), so we can assume the existence of VPORTA
+// Using "flattened" names instead of the structs since that can cause problems
+// in rare cases. (ie, VPORTA_OUT instead of VPORTA.OUT).
+
+#define DUMMY_PORT VPORTA_OUT
+#define DUMMY_DDR VPORTA_DIR
+
+#ifndef VPORTB
+#define VPORTB_OUT DUMMY_PORT
+#define VPORTB_DIR DUMMY_DDR
+#endif
+
+#ifndef VPORTC
+#define VPORTC_OUT DUMMY_PORT
+#define VPORTC_DIR DUMMY_DDR
+#endif
+
+#ifndef VPORTD
+#define VPORTD_OUT DUMMY_PORT
+#define VPORTD_DIR DUMMY_DDR
+#endif
+
+#ifndef VPORTE
+#define VPORTE_OUT DUMMY_PORT
+#define VPORTE_DIR DUMMY_DDR
+#endif
+
+#ifndef VPORTF
+#define VPORTF_OUT DUMMY_PORT
+#define VPORTF_DIR DUMMY_DDR
+#endif
+
+#ifndef VPORTG
+#define VPORTG_OUT DUMMY_PORT
+#define VPORTG_DIR DUMMY_DDR
+#endif
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////
 #ifdef ARDUINO_ARCH_AVR
@@ -297,7 +345,7 @@ const int cbiCycles = 2;
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief AVRxt (tinyAVR 0/1/2, megaAVR 0, and AVR Dx-series) low level macros
 ////////////////////////////////////////////////////////////////////////////////
-// All existing AVRxt devices, as well as any that they could release without 
+// All existing AVRxt devices, as well as any that they could release without
 // doing something about the fact that they are out of registers in the low IO
 // space after PORTG (the last 4 contain the GPIOR aka GPR registers) should be
 // supported by this? -@SpenceKonde 2/17/2021.
@@ -305,14 +353,14 @@ const int cbiCycles = 2;
 /// Port Data Direction control Register address
 #define AVR_DDR(id) _AVR_DDR((id))
 #define _AVR_DDR(id) ((id==A) ? VPORTA_DIR : (id==B) ? VPORTB_DIR : (id==C) ? VPORTC_DIR : \
-		(id==D) ? VPORTD_DIR : (id==E) ? VPORTE_DIR : (id==F) ? VPORTF_DIR : VPORTG_DIR)
+		(id==D) ? VPORTD_DIR : (id==E) ? VPORTE_DIR : VPORTF_DIR )
 #define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
 #define FAB_DDR(portId, val) AVR_DDR(portId) = val
 
 /// Port address & pin level manipulation
 #define AVR_PORT(id) _AVR_PORT((id))
 #define _AVR_PORT(id) ((id==A) ? VPORTA_OUT : (id==B) ? VPORTB_OUT : (id==C) ? VPORTC_OUT : \
-		(id==D) ? VPORTD_OUT : (id==E) ? VPORTE_OUT : (id==F) ? VPORTF_OUT : PORTG)
+		(id==D) ? VPORTD_OUT : (id==E) ? VPORTE_OUT : VPORTF_OUT)
 #define FAB_PORT(portId, val) AVR_PORT(portId) = val
 // Note: gcc converts these bit manipulations to sbi and cbi instructions
 #define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
@@ -622,7 +670,7 @@ class avrBitbangLedStrip
 	/// Note: the array size is not used as it is expected that it will be
 	/// at least as big as the largest index in the pixel map.
 	////////////////////////////////////////////////////////////////////////
-	template <class pixelType> 
+	template <class pixelType>
 	static inline void sendPixelsRemap(
 			const uint16_t numPixels,
 			const uint16_t * pixelMap,
@@ -645,8 +693,8 @@ class avrBitbangLedStrip
 
 	////////////////////////////////////////////////////////////////////////
 	/// @brief Sends an array of 3 pixels per 16bit words to the LEDs
-	/// This yelds 32K colors, and saves 33% RAM without using a palette. 
-	/// 
+	/// This yelds 32K colors, and saves 33% RAM without using a palette.
+	///
 	/// the SRAM.
 	/// @brief Sends an array of 16-bit words to the LEDs. Each word encodes
 	/// one pixel with 64 levels (5 bits)
@@ -934,7 +982,7 @@ avrBitbangLedStrip<FAB_TVAR>::twoPortSoftwareSendBytes(const uint16_t count, con
 				const uint8_t mask = 1 << bit;
 
 				volatile bool isbitDhigh = array[pos] & mask;
-	
+
 				volatile bool isbitChigh = (protocol == TWO_PORT_SPLIT_BITBANG) ?
 					array[pos + blockSize] & mask : // split: pixel is blockSize away.
 					array[pos + bpp] & mask;        // interleaved: pixel is next one.
@@ -1181,7 +1229,7 @@ avrBitbangLedStrip<FAB_TVAR>::onePortSoftwareSendBytes(const uint16_t count, con
 		const uint8_t val = array[c];
 		for(int8_t b=7; b>=0; b--) {
 			const bool bit = (val>>b) & 0x1;
- 
+
  			if (bit) {
 				// Send a ONE
 
@@ -1458,8 +1506,8 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 	uint16_t index;
 	index = 0;
 	while (1) {
-		uint8_t elem; 
-		elem = pixelArray[offset++]; 
+		uint8_t elem;
+		elem = pixelArray[offset++];
 		for (uint8_t j = 0; j < 8/bitsPerPixel; j++) {
 			if (index++ >= count) {
 				goto end;
@@ -1508,8 +1556,8 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 	uint16_t index;
 	index = 0;
 	while (1) {
-		uint8_t elem; 
-		elem = pixelArray[offset++]; 
+		uint8_t elem;
+		elem = pixelArray[offset++];
 		for (uint8_t j = 0; j < 8/bitsPerPixel; j++) {
 			if (index++ >= count) {
 				goto end;
@@ -1552,8 +1600,8 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels (
 	uint16_t index;
 	index = 0;
 	while (1) {
-		uint8_t elem; 
-		elem = pixelArray[offset++]; 
+		uint8_t elem;
+		elem = pixelArray[offset++];
 		for (uint8_t j = 0; j < 8/bitsPerPixel; j++) {
 			if (index++ >= count) {
 				goto end;
@@ -1568,7 +1616,7 @@ end:
 }
 
 template<FAB_TDEF>
-template <class pixelType> 
+template <class pixelType>
 inline void
 avrBitbangLedStrip<FAB_TVAR>::sendPixelsRemap(
 		const uint16_t numPixels,
@@ -1666,7 +1714,7 @@ avrBitbangLedStrip<FAB_TVAR>::sendPixels(
 
 	bytes[3] = 0;
 	for (int i = 0; i < count; i++) {
-		const uint16_t elem = pixelArray[i]; 
+		const uint16_t elem = pixelArray[i];
 		bytes[0] = (uint8_t) elem << brightness;
 		bytes[1] = (elem >> (5 - brightness)) & mask5;
 		bytes[2] = (elem >> (10 - brightness)) & mask10;
@@ -1806,7 +1854,7 @@ class apa104 : public avrBitbangLedStrip<FAB_TVAR_APA104>
 	~apa104() {};
 };
 #undef FAB_TVAR_APA104
-#define pl9823 apa104; 
+#define pl9823 apa104;
 
 
 ////////////////////////////////////////////////////////////////////////////////
