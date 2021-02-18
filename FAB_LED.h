@@ -293,6 +293,45 @@ const int cbiCycles = 2;
 
 
 ////////////////////////////////////////////////////////////////////////////////
+#elif defined(ARDUINO_ARCH_MEGAAVR)
+////////////////////////////////////////////////////////////////////////////////
+/// @brief AVRxt (tinyAVR 0/1/2, megaAVR 0, and AVR Dx-series) low level macros
+////////////////////////////////////////////////////////////////////////////////
+// All existing AVRxt devices, as well as any that they could release without 
+// doing something about the fact that they are out of registers in the low IO
+// space after PORTG (the last 4 contain the GPIOR aka GPR registers) should be
+// supported by this? -@SpenceKonde 2/17/2021.
+
+/// Port Data Direction control Register address
+#define AVR_DDR(id) _AVR_DDR((id))
+#define _AVR_DDR(id) ((id==A) ? VPORTA_DIR : (id==B) ? VPORTB_DIR : (id==C) ? VPORTC_DIR : \
+		(id==D) ? VPORTD_DIR : (id==E) ? VPORTE_DIR : (id==F) ? VPORTF_DIR : VPORTG_DIR)
+#define SET_DDR_HIGH( portId, portPin) AVR_DDR(portId)  |= 1U << portPin
+#define FAB_DDR(portId, val) AVR_DDR(portId) = val
+
+/// Port address & pin level manipulation
+#define AVR_PORT(id) _AVR_PORT((id))
+#define _AVR_PORT(id) ((id==A) ? VPORTA_OUT : (id==B) ? VPORTB_OUT : (id==C) ? VPORTC_OUT : \
+		(id==D) ? VPORTD_OUT : (id==E) ? VPORTE_OUT : (id==F) ? VPORTF_OUT : PORTG)
+#define FAB_PORT(portId, val) AVR_PORT(portId) = val
+// Note: gcc converts these bit manipulations to sbi and cbi instructions
+#define SET_PORT_HIGH(portId, portPin) AVR_PORT(portId) |= 1U << portPin
+#define SET_PORT_LOW( portId, portPin) AVR_PORT(portId) &= ~(1U << portPin);
+
+/// Method to optimally delay N cycles with nops for bitBang.
+#define DELAY_CYCLES(count) if (count > 0) __builtin_avr_delay_cycles(count);
+
+// Number of cycles sbi and cbi instructions take when using SET macros
+// AVRxt has single cycle sbi and cbi (yqaaay!)
+const int sbiCycles = 1;
+const int cbiCycles = 1;
+
+
+#define DISABLE_INTERRUPTS {uint8_t oldSREG = SREG; __builtin_avr_cli()
+#define RESTORE_INTERRUPTS SREG = oldSREG; }
+
+
+////////////////////////////////////////////////////////////////////////////////
 #elif defined(__arm__)
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief ARM0 - ARM3 low level macros
